@@ -99,7 +99,9 @@ export default function Page() {
     const { data, error } = await supabase
       .from('schedule')
       .select('*')
-      .eq('user_id', user.id)
+
+      // .eq('user_id', user.id)
+      
       .order('created_at', { ascending: false })
 
     if (error) {
