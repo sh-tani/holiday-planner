@@ -96,10 +96,11 @@ export default function Page() {
       return
     }
 
+    // supabase連携確認のため一時的に.eqをコメントアウト
     const { data, error } = await supabase
       .from('schedule')
       .select('*')
-      .eq('user_id', user.id)
+      // .eq('user_id', user.id)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -209,10 +210,23 @@ export default function Page() {
      */
     if (editingId !== null) {
       const { error } = await supabase
+        // .from('schedule')
+        // .update(planData)
+        // .eq('id', editingId)
+        // .eq('user_id', user.id)
         .from('schedule')
-        .update(planData)
+        .update({
+          mountain: mountain.trim(),
+          area: area.trim(),
+          date: undecided ? null : date,
+          day: undecided ? null : day,
+          weather: '晴れ',
+          rain: 20,
+          wind: 3,
+          fixed: !undecided,
+        })
         .eq('id', editingId)
-        .eq('user_id', user.id)
+        // supabase動作確認のため一時的に変更
 
       if (error) {
         console.error('予定の更新に失敗しました:', error)
@@ -227,11 +241,24 @@ export default function Page() {
      */
     else {
       const { error } = await supabase
+        // .from('schedule')
+        // .insert({
+          // ...planData,
+          // user_id: user.id,
+        // })
         .from('schedule')
         .insert({
-          ...planData,
-          user_id: user.id,
+          mountain: mountain.trim(),
+          area: area.trim(),
+          date: undecided ? null : date,
+          day: undecided ? null : day,
+          weather: '晴れ',
+          rain: 20,
+          wind: 3,
+          fixed: !undecided,
+          user_id: null,
         })
+        // supabase動作確認のため一時的に変更
 
       if (error) {
         console.error('予定の登録に失敗しました:', error)
@@ -277,7 +304,8 @@ export default function Page() {
       .from('schedule')
       .delete()
       .eq('id', id)
-      .eq('user_id', user.id)
+      // .eq('user_id', user.id)
+      // supabase動作確認のため一時的にコメントアウト
 
     if (error) {
       console.error('予定の削除に失敗しました:', error)
