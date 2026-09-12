@@ -171,16 +171,18 @@ export default function Page() {
     /**
      * ログインユーザーを取得
      */
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
+    // supabase動作確認のため一時的にコメントアウト
+    // const {
+      // data: { user },
+      // error: userError,
+    // } = await supabase.auth.getUser()
 
-    if (userError || !user) {
-      setFormError('ログインが必要です。')
-      setSaving(false)
-      return
-    }
+    // if (userError || !user) {
+      // setFormError('ログインが必要です。')
+      // setSaving(false)
+      // return
+    // }
+    // ここまで一時的にコメントアウト
 
     /**
      * 保存するデータ
