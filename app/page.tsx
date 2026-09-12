@@ -248,7 +248,6 @@ export default function Page() {
           // ...planData,
           // user_id: user.id,
         // })
-        .from('schedule')
         .insert({
           mountain: mountain.trim(),
           area: area.trim(),
