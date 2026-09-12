@@ -1,6 +1,7 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import { AuthProvider } from "@/lib/AuthContext"
 
 export const metadata: Metadata = {
   title: '休日プランナー | 天気と予定で休日をもっと楽しむ',
