@@ -1,6 +1,7 @@
 'use client'
 
 import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import {
   CalendarDays,
   Check,
@@ -16,14 +17,12 @@ import {
   X,
 } from 'lucide-react'
 
-import { supabase } from '@/lib/supabaseClient'
-
 type Plan = {
-  id: number
+  id: string
   mountain: string
   area: string
-  date: string
-  day: string
+  date: string | null
+  day: string | null
   weather: string
   rain: number
   wind: number
@@ -59,6 +58,7 @@ function getRating(plan: Plan) {
 
 export default function Page() {
   const [plans, setPlans] = useState<Plan[]>([])
+  const [userName, setUserName] = useState('')
 
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isAlternativesOpen, setIsAlternativesOpen] = useState(false)
@@ -75,42 +75,88 @@ export default function Page() {
   const [day, setDay] = useState('')
   const [undecided, setUndecided] = useState(false)
 
-  /**
-   * Supabaseから予定を取得
-   */
+  // APIから予定を取得
   useEffect(() => {
     fetchPlans()
+    fetchUserName()
   }, [])
 
   async function fetchPlans() {
     setLoading(true)
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
-
-    if (userError || !user) {
-      console.error('ユーザー情報の取得に失敗しました:', userError)
+    try {
+      const response = await fetch('/api/plans')
+      
+      if (!response.ok) {
+        throw new Error('予定の取得に失敗しました')
+      }
+      
+      const data = await response.json()
+      
+      setPlans(data ?? [])
+    } catch (error) {
+      console.error('予定の取得に失敗しました:', error)
+    } finally {
       setLoading(false)
-      return
     }
+  }
 
-    // supabase連携確認のため一時的に.eqをコメントアウト
-    const { data, error } = await supabase
-      .from('schedule')
-      .select('*')
-      // .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
+  async function fetchUserName() {
+    try {
+      const supabase = createClient()
+
+      console.log('① fetchUserName開始')
+      
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser()
+      
+      console.log('② user:', user)
+      console.log('③ userError:', userError)
+
+      if (userError) {
+        throw userError
+      }
+      
+      if (!user) {
+        console.log('④ ログインユーザーが取得できませんでした')
+        return
+      }
+      
+      const { data: profile, error: profileError } =
+        await supabase
+        .from('profiles')
+        .select('name')
+        .eq('id', user.id)
+        .single()
+
+        console.log('⑤ profile:', profile)
+        console.log('⑥ profileError:', profileError)
+
+      if (profileError) {
+        throw profileError
+      }
+      
+      setUserName(profile?.name ?? '')
+      console.log('⑦ userName:', profile?.name)
+    } catch (error) {
+      console.error(
+        'ユーザー情報の取得に失敗しました:',
+        error
+      )
+    }
+  }
+
+  async function handleLogout() {
+    const supabase = createClient()
+    const { error } = await supabase.auth.signOut()
 
     if (error) {
-      console.error('予定の取得に失敗しました:', error)
-      setLoading(false)
+      console.error('ログアウトに失敗しました:', error)
       return
     }
-
-    setPlans(data ?? [])
-    setLoading(false)
+    window.location.href = '/auth/login'
   }
 
   /**
@@ -169,31 +215,13 @@ export default function Page() {
     setFormError('')
 
     /**
-     * ログインユーザーを取得
-     */
-    // supabase動作確認のため一時的にコメントアウト
-    // const {
-      // data: { user },
-      // error: userError,
-    // } = await supabase.auth.getUser()
-
-    // if (userError || !user) {
-      // setFormError('ログインが必要です。')
-      // setSaving(false)
-      // return
-    // }
-    // ここまで一時的にコメントアウト
-
-    /**
      * 保存するデータ
      */
     const planData = {
       mountain: mountain.trim(),
       area: area.trim(),
-
       // 日程未定の場合は空文字ではなくNULLにする
       date: undecided ? null : date,
-
       // 日程未定の場合は曜日もNULL
       day: undecided ? null : day,
 
@@ -207,115 +235,80 @@ export default function Page() {
       fixed: !undecided,
     }
 
-    /**
-     * 編集
-     */
-    if (editingId !== null) {
-      const { error } = await supabase
-        // .from('schedule')
-        // .update(planData)
-        // .eq('id', editingId)
-        // .eq('user_id', user.id)
-        .from('schedule')
-        .update({
-          mountain: mountain.trim(),
-          area: area.trim(),
-          date: undecided ? null : date,
-          day: undecided ? null : day,
-          weather: '晴れ',
-          rain: 20,
-          wind: 3,
-          fixed: !undecided,
-        })
-        .eq('id', editingId)
-        // supabase動作確認のため一時的に変更
+    try{
+      // 編集
+      if (editingId !== null) {
+        const response = await fetch(
+          `/api/plans/${editingId}`,
+          {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(planData),
+          }
+        )
 
-      if (error) {
-        console.error('予定の更新に失敗しました:', error)
+        if (!response.ok) {
+          throw new Error('予定の更新に失敗しました')
+        }
+      }
+
+      // 新規登録
+      else {
+        const response = await fetch('/api/plans', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(planData),
+        })
+
+        if (!response.ok) {
+          throw new Error('予定の登録に失敗しました')
+        }
+      }
+
+      // DBの最新状態を再取得
+      await fetchPlans()
+      setIsFormOpen(false)
+      resetForm()
+    }catch (error) {
+      console.error(error)
+      if (editingId !== null) {
         setFormError('予定の更新に失敗しました。')
-        setSaving(false)
-        return
-      }
-    }
-
-    /**
-     * 新規登録
-     */
-    else {
-      const { error } = await supabase
-        // .from('schedule')
-        // .insert({
-          // ...planData,
-          // user_id: user.id,
-        // })
-        .from('schedule')
-        .insert({
-          mountain: mountain.trim(),
-          area: area.trim(),
-          date: undecided ? null : date,
-          day: undecided ? null : day,
-          weather: '晴れ',
-          rain: 20,
-          wind: 3,
-          fixed: !undecided,
-          user_id: null,
-        })
-        // supabase動作確認のため一時的に変更
-
-      if (error) {
-        console.error('予定の登録に失敗しました:', error)
+      } else {
         setFormError('予定の登録に失敗しました。')
-        setSaving(false)
-        return
       }
+    } finally {
+      setSaving(false)
     }
-
-    /**
-     * DBの最新状態を再取得
-     */
-    await fetchPlans()
-
-    setSaving(false)
-    setIsFormOpen(false)
-    resetForm()
   }
 
   /**
    * 予定を削除
    */
-  async function removePlan(id: number) {
-    const confirmed = window.confirm(
-      'この予定を削除しますか？'
-    )
+  async function removePlan(id: string) {
+    const confirmed = window.confirm('この予定を削除しますか？')
 
     if (!confirmed) {
       return
     }
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
+    try {
+      const response = await fetch(`/api/plans/${id}`, {
+        method: 'DELETE',
+      })
 
-    if (userError || !user) {
-      console.error('ユーザー情報の取得に失敗しました:', userError)
-      return
-    }
+      if (!response.ok) {
+        throw new Error('予定の削除に失敗しました')
+      }
 
-    const { error } = await supabase
-      .from('schedule')
-      .delete()
-      .eq('id', id)
-      // .eq('user_id', user.id)
-      // supabase動作確認のため一時的にコメントアウト
-
-    if (error) {
+      await fetchPlans()
+    } catch (error) {
       console.error('予定の削除に失敗しました:', error)
       alert('予定の削除に失敗しました。')
-      return
     }
-
-    await fetchPlans()
   }
 
   /**
@@ -353,10 +346,11 @@ export default function Page() {
         </a>
 
         <button
-          className="login-button"
           type="button"
+          onClick={handleLogout}
+          className="login-button"
         >
-          ログイン
+          {userName ? `${userName}さん` : 'ログイン'}
           <ChevronRight size={16} />
         </button>
       </header>
@@ -760,7 +754,7 @@ function PlanCard({
 }: {
   plan: Plan
   onEdit: (plan: Plan) => void
-  onDelete: (id: number) => void
+  onDelete: (id: string) => void
   compact?: boolean
 }) {
   const rating = getRating(plan)

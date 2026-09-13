@@ -4,7 +4,7 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { supabase } from "@/lib/supabaseClient"
+import { createClient } from "@/lib/supabase/client"
 
 export default function SignupPage() {
   const [email, setEmail] = useState("")
@@ -19,6 +19,7 @@ export default function SignupPage() {
   useEffect(() => {
     // セッションチェック
     const checkSession = async () => {
+      const supabase = createClient()
       const {
         data: { session },
       } = await supabase.auth.getSession()
@@ -39,6 +40,8 @@ export default function SignupPage() {
     setError(null)
 
     try {
+      const supabase = createClient()
+
       // 1. ユーザー登録
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
@@ -58,6 +61,7 @@ export default function SignupPage() {
         {
           id: authData.user.id,
           name: name || email.split("@")[0], // 名前が空の場合はメールアドレスの@前を使用
+          email: email,
         },
       ])
 

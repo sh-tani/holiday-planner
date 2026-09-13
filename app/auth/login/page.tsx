@@ -4,9 +4,10 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { supabase } from "@/lib/supabaseClient"
+import { createClient } from "@/lib/supabase/client"
 
 export default function LoginPage() {
+  const supabase = createClient()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -48,12 +49,10 @@ export default function LoginPage() {
       }
 
       console.log("ログイン成功")
+      
+      router.push("/")
+      router.refresh()
 
-      // 少し遅延させてからリダイレクト
-      setTimeout(() => {
-        router.push("/")
-        router.refresh()
-      }, 1000)
     } catch (error: any) {
       console.error("ログインエラー:", error)
       setError(error.message)
