@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { getGuestPlans } from "@/lib/guestStorage"
 import {
   CalendarDays,
   Check,
@@ -17,17 +18,12 @@ import {
   X,
 } from 'lucide-react'
 
-type Plan = {
-  id: string
-  mountain: string
-  area: string
-  date: string | null
-  day: string | null
-  weather: string
-  rain: number
-  wind: number
-  fixed: boolean
-}
+import type { Plan } from "@/lib/types"
+import {
+  addGuestPlan,
+  updateGuestPlan,
+  deleteGuestPlan,
+} from "@/lib/guestStorage"
 
 /**
  * 天気情報からおすすめ度を計算
@@ -59,11 +55,12 @@ function getRating(plan: Plan) {
 export default function Page() {
   const [plans, setPlans] = useState<Plan[]>([])
   const [userName, setUserName] = useState('')
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
 
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isAlternativesOpen, setIsAlternativesOpen] = useState(false)
 
-  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   const [formError, setFormError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -77,22 +74,46 @@ export default function Page() {
 
   // APIから予定を取得
   useEffect(() => {
-    fetchPlans()
-    fetchUserName()
+    checkAuth()
   }, [])
 
-  async function fetchPlans() {
-    setLoading(true)
-
+  async function checkAuth() {
     try {
-      const response = await fetch('/api/plans')
+      const supabase = createClient()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
       
+      if (user) {
+        setIsLoggedIn(true)
+        await fetchPlans(true)
+        await fetchUserName()
+      } else {
+        setIsLoggedIn(false)
+        await fetchPlans(false)
+      }
+    } catch (error) {
+      console.error('認証チェックに失敗しました:', error)
+      
+      // セッションがない場合はゲストとして扱う
+      setIsLoggedIn(false)
+      await fetchPlans(false)
+    }
+  }
+
+  async function fetchPlans(loggedIn: boolean) {
+    setLoading(true)
+    try {
+      if (!loggedIn) {
+        const guestPlans = getGuestPlans()
+        setPlans(guestPlans)
+        return
+      }
+      const response = await fetch('/api/plans')
       if (!response.ok) {
         throw new Error('予定の取得に失敗しました')
       }
-      
       const data = await response.json()
-      
       setPlans(data ?? [])
     } catch (error) {
       console.error('予定の取得に失敗しました:', error)
@@ -199,7 +220,7 @@ export default function Page() {
    */
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-
+    
     if (
       !mountain.trim() ||
       !area.trim() ||
@@ -210,32 +231,60 @@ export default function Page() {
       )
       return
     }
-
+    
     setSaving(true)
     setFormError('')
-
+    
     /**
      * 保存するデータ
      */
     const planData = {
       mountain: mountain.trim(),
       area: area.trim(),
-      // 日程未定の場合は空文字ではなくNULLにする
       date: undecided ? null : date,
-      // 日程未定の場合は曜日もNULL
       day: undecided ? null : day,
-
-      // 現時点ではモック値
       weather: '晴れ',
       rain: 20,
       wind: 3,
-
-      // true = 日程確定
-      // false = 日程未定
       fixed: !undecided,
     }
+    
+    try {
+      // =========================
+      // ゲストモード
+      // =========================
+      if (!isLoggedIn) {
+        // 編集
+        if (editingId !== null) {
+          const updatedPlan: Plan = {
+            id: editingId,
+            ...planData,
+          }
+          
+          updateGuestPlan(updatedPlan)
+        }
+        
+        // 新規登録
+        else {
+          const newPlan: Plan = {
+            id: crypto.randomUUID(),
+            ...planData,
+          }
+          
+          addGuestPlan(newPlan)
+        }
+        // localStorageから最新状態を取得
+        await fetchPlans(false)
+        
+        setIsFormOpen(false)
+        resetForm()
+        return
+      }
 
-    try{
+      // =========================
+      // ログインモード
+      // =========================
+      
       // 編集
       if (editingId !== null) {
         const response = await fetch(
@@ -248,12 +297,12 @@ export default function Page() {
             body: JSON.stringify(planData),
           }
         )
-
+        
         if (!response.ok) {
           throw new Error('予定の更新に失敗しました')
         }
       }
-
+      
       // 新規登録
       else {
         const response = await fetch('/api/plans', {
@@ -263,18 +312,20 @@ export default function Page() {
           },
           body: JSON.stringify(planData),
         })
-
+        
         if (!response.ok) {
           throw new Error('予定の登録に失敗しました')
         }
       }
-
+      
       // DBの最新状態を再取得
-      await fetchPlans()
+      await fetchPlans(true)
+      
       setIsFormOpen(false)
       resetForm()
-    }catch (error) {
+    } catch (error) {
       console.error(error)
+      
       if (editingId !== null) {
         setFormError('予定の更新に失敗しました。')
       } else {
@@ -291,11 +342,21 @@ export default function Page() {
   async function removePlan(id: string) {
     const confirmed = window.confirm('この予定を削除しますか？')
 
-    if (!confirmed) {
-      return
-    }
-
+    if (!confirmed) return
     try {
+      // =========================
+      // ゲストモード
+      // =========================
+      if (!isLoggedIn) {
+        deleteGuestPlan(id)
+
+        await fetchPlans(false)
+        return
+      }
+      
+      // =========================
+      // ログインモード
+      // =========================
       const response = await fetch(`/api/plans/${id}`, {
         method: 'DELETE',
       })
@@ -304,7 +365,7 @@ export default function Page() {
         throw new Error('予定の削除に失敗しました')
       }
 
-      await fetchPlans()
+      await fetchPlans(true)
     } catch (error) {
       console.error('予定の削除に失敗しました:', error)
       alert('予定の削除に失敗しました。')
