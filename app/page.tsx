@@ -405,15 +405,39 @@ export default function Page() {
 
           <span>休日プランナー</span>
         </a>
-
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="login-button"
-        >
-          {userName ? `${userName}さん` : 'ログイン'}
-          <ChevronRight size={16} />
-        </button>
+        {isLoggedIn ? (
+          <div className="header-actions">
+            <span className="user-name">
+              {userName ? `${userName}さん` : ''}
+            </span>
+            
+            <button
+             type="button"
+             onClick={handleLogout}
+             className="login-button"
+            >
+              ログアウト
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        ) : (
+         <div className="header-actions">
+           <span className="guest-label">
+             ゲスト利用中
+           </span>
+           
+           <button
+            type="button"
+            onClick={() => {
+              window.location.href = '/auth/login'
+             }}
+           className="login-button"
+           >
+             ログイン
+             <ChevronRight size={16} />
+           </button>
+         </div>
+        )}
       </header>
 
       <div id="top" className="page-content">
