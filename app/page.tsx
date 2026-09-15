@@ -20,6 +20,7 @@ import {
 
 import type { Plan } from "@/lib/types"
 import { getRating } from '@/lib/planner/rating'
+import { formatDateWithWeekday } from '@/lib/planner/date'
 import {
   addGuestPlan,
   updateGuestPlan,
@@ -33,15 +34,6 @@ type Mountain = {
   latitude: number
   longitude: number
   elevation: number | null
-}
-
-function formatDateWithWeekday(date: string) {
-  const [year, month, day] = date.split('-').map(Number)
-  const dateObject = new Date(year, month - 1, day)
-
-  const weekdays = ['日', '月', '火', '水', '木', '金', '土']
-
-  return `${date}（${weekdays[dateObject.getDay()]}）`
 }
 
 export default function Page() {
