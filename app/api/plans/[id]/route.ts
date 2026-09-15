@@ -1,22 +1,16 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-type Params = {
-  params: Promise<{
-    id: string
-  }>
-}
-
-// PATCH /api/plans/:id
+// PATCH /api/plans/[id]
 export async function PATCH(
   request: Request,
-  { params }: Params
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params
+
     const supabase = await createClient()
 
-    // ログインユーザーを取得
     const {
       data: { user },
       error: userError,
@@ -32,26 +26,33 @@ export async function PATCH(
     const body = await request.json()
 
     const {
-      mountain,
-      area,
+      title,
+      mountainId,
       date,
-      day,
       weather,
+      weatherCode,
       rain,
       wind,
       fixed,
     } = body
 
+    if (!mountainId) {
+      return NextResponse.json(
+        { error: '山の選択は必須です。' },
+        { status: 400 }
+      )
+    }
+
     const { data, error } = await supabase
       .from('schedule')
       .update({
-        mountain: mountain?.trim(),
-        area: area?.trim(),
+        title: title ?? '',
+        mountain_id: mountainId,
         date: date || null,
-        day: day || null,
-        weather: weather ?? '晴れ',
-        rain: rain ?? 20,
-        wind: wind ?? 3,
+        weather: weather ?? '不明',
+        weather_code: weatherCode ?? null,
+        rain: rain ?? 0,
+        wind: wind ?? 0,
         fixed: fixed ?? true,
       })
       .eq('id', id)
@@ -63,14 +64,29 @@ export async function PATCH(
       console.error('予定の更新に失敗しました:', error)
 
       return NextResponse.json(
-        { error: '予定の更新に失敗しました。' },
+        {
+          error: '予定の更新に失敗しました。',
+          details: error.message,
+        },
         { status: 500 }
       )
     }
 
-    return NextResponse.json(data)
+    const plan = {
+      id: data.id,
+      title: data.title ?? '',
+      mountainId: data.mountain_id,
+      date: data.date,
+      weather: data.weather ?? '不明',
+      weatherCode: data.weather_code ?? null,
+      rain: data.rain ?? 0,
+      wind: data.wind ?? 0,
+      fixed: data.fixed ?? true,
+    }
+
+    return NextResponse.json(plan)
   } catch (error) {
-    console.error(error)
+    console.error('予定更新APIでエラーが発生しました:', error)
 
     return NextResponse.json(
       { error: 'サーバーエラーが発生しました。' },
@@ -79,16 +95,16 @@ export async function PATCH(
   }
 }
 
-// DELETE /api/plans/:id
+// DELETE /api/plans/[id]
 export async function DELETE(
-  _request: Request,
-  { params }: Params
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params
+
     const supabase = await createClient()
 
-    // ログインユーザーを取得
     const {
       data: { user },
       error: userError,
@@ -111,14 +127,17 @@ export async function DELETE(
       console.error('予定の削除に失敗しました:', error)
 
       return NextResponse.json(
-        { error: '予定の削除に失敗しました。' },
+        {
+          error: '予定の削除に失敗しました。',
+          details: error.message,
+        },
         { status: 500 }
       )
     }
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error(error)
+    console.error('予定削除APIでエラーが発生しました:', error)
 
     return NextResponse.json(
       { error: 'サーバーエラーが発生しました。' },

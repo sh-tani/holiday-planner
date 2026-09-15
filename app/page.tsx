@@ -25,30 +25,131 @@ import {
   deleteGuestPlan,
 } from "@/lib/guestStorage"
 
+type Mountain = {
+  id: string
+  name: string
+  area: string
+  latitude: number
+  longitude: number
+  elevation: number | null
+}
+
+function formatDateWithWeekday(date: string) {
+  const [year, month, day] = date.split('-').map(Number)
+  const dateObject = new Date(year, month - 1, day)
+
+  const weekdays = ['日', '月', '火', '水', '木', '金', '土']
+
+  return `${date}（${weekdays[dateObject.getDay()]}）`
+}
+
 /**
  * 天気情報からおすすめ度を計算
  */
 function getRating(plan: Plan) {
-  if (plan.rain <= 20 && plan.wind <= 4) {
+  
+  // 日程未定
+  if (!plan.date) {
     return {
-      label: 'おすすめ',
-      tone: 'good',
-      score: 92,
+      label: '日程未定',
+      tone: 'caution',
+      score: 0,
     }
   }
 
-  if (plan.rain <= 40 && plan.wind <= 7) {
+  // 天気情報が取得できていない
+  if (plan.weatherCode === null) {
+    return {
+      label: '予報待ち',
+      tone: 'caution',
+      score: 0,
+    }
+  }
+
+  const { weatherCode, rain, wind } = plan
+
+  // 雷雨
+  if ([95, 96, 99].includes(weatherCode)) {
+    return {
+      label: 'おすすめしない',
+      tone: 'bad',
+      score: 10,
+    }
+  }
+
+  // 大雨・強いにわか雨・大雪・強い雪
+  if ([65, 67, 75, 82, 86].includes(weatherCode)) {
+    return {
+      label: 'おすすめしない',
+      tone: 'bad',
+      score: 20,
+    }
+  }
+
+  // 強風
+  if (wind > 10) {
+    return {
+      label: 'おすすめしない',
+      tone: 'bad',
+      score: 25,
+    }
+  }
+
+  // 雨・にわか雨・雪・霧雨など
+  if (
+    [
+      45, 48,
+      51, 53, 55, 56, 57,
+      61, 63, 66,
+      71, 73, 77,
+      80, 81, 85,
+    ].includes(weatherCode)
+  ) {
+    if (rain >= 50 || wind > 7) {
+      return {
+        label: 'おすすめしない',
+        tone: 'bad',
+        score: 35,
+      }
+    }
+
     return {
       label: '注意して計画',
       tone: 'caution',
-      score: 68,
+      score: 55,
     }
   }
 
+  // 晴れ・くもり
+  if ([0, 1, 2, 3].includes(weatherCode)) {
+    if (rain <= 20 && wind <= 4) {
+      return {
+        label: 'おすすめ',
+        tone: 'good',
+        score: 92,
+      }
+    }
+
+    if (rain <= 40 && wind <= 7) {
+      return {
+        label: '注意して計画',
+        tone: 'caution',
+        score: 70,
+      }
+    }
+
+    return {
+      label: 'おすすめしない',
+      tone: 'bad',
+      score: 40,
+    }
+  }
+
+  // 想定外のweatherCode
   return {
-    label: 'おすすめしない',
-    tone: 'bad',
-    score: 34,
+    label: '判定不可',
+    tone: 'caution',
+    score: 0,
   }
 }
 
@@ -66,16 +167,64 @@ export default function Page() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  const [mountain, setMountain] = useState('')
-  const [area, setArea] = useState('')
+  const [title, setTitle] = useState('')
+  const [mountainId, setMountainId] = useState('')
+  const [mountainName, setMountainName] = useState('')
+  const [mountainCandidates, setMountainCandidates] = useState<Mountain[]>([])
+  const [isMountainSearching, setIsMountainSearching] = useState(false)
+  const [selectedMountain, setSelectedMountain] = useState<Mountain | null>(null)
+  const [mountainsById, setMountainsById] = useState<Record<string, Mountain>>({})
+
   const [date, setDate] = useState('')
-  const [day, setDay] = useState('')
   const [undecided, setUndecided] = useState(false)
+
+  
 
   // APIから予定を取得
   useEffect(() => {
     checkAuth()
   }, [])
+  
+  useEffect(() => {
+    const query = mountainName.trim()
+    
+    if (!query) {
+      setMountainCandidates([])
+      setIsMountainSearching(false)
+      return
+    }
+
+    // すでに候補から山を選択済みなら検索しない
+    if (mountainId) {
+      setMountainCandidates([])
+      return
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        setIsMountainSearching(true)
+
+        const response = await fetch(
+          `/api/mountains?query=${encodeURIComponent(query)}`
+        )
+
+        if (!response.ok) {
+          throw new Error('山情報の取得に失敗しました')
+        }
+
+        const data = await response.json()
+
+        setMountainCandidates(data ?? [])
+      } catch (error) {
+        console.error('山の検索に失敗しました:', error)
+        setMountainCandidates([])
+      } finally {
+        setIsMountainSearching(false)
+      }
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [mountainName, mountainId])
 
   async function checkAuth() {
     try {
@@ -101,20 +250,72 @@ export default function Page() {
     }
   }
 
+  async function fetchMountainInfo(loadedPlans: Plan[]) {
+    const mountainIds = [
+      ...new Set(
+        loadedPlans
+          .map((plan) => plan.mountainId)
+          .filter(Boolean)
+      ),
+    ]
+
+    const mountainResults = await Promise.all(
+      mountainIds.map(async (id) => {
+        try {
+          const response = await fetch(
+            `/api/mountains?id=${encodeURIComponent(id)}`
+          )
+
+          if (!response.ok) {
+            return null
+          }
+
+          return (await response.json()) as Mountain
+        } catch (error) {
+          console.error(
+            `山情報の取得に失敗しました: ${id}`,
+            error
+          )
+          return null
+        }
+      })
+    )
+
+    const mountainMap: Record<string, Mountain> = {}
+
+    mountainResults.forEach((mountain) => {
+      if (mountain) {
+        mountainMap[mountain.id] = mountain
+      }
+    })
+
+    setMountainsById(mountainMap)
+  }
+
   async function fetchPlans(loggedIn: boolean) {
     setLoading(true)
+
     try {
       if (!loggedIn) {
         const guestPlans = getGuestPlans()
+
         setPlans(guestPlans)
+        await fetchMountainInfo(guestPlans)
+
         return
       }
+
       const response = await fetch('/api/plans')
+
       if (!response.ok) {
         throw new Error('予定の取得に失敗しました')
       }
+
       const data = await response.json()
-      setPlans(data ?? [])
+      const loadedPlans: Plan[] = data ?? []
+
+      setPlans(loadedPlans)
+      await fetchMountainInfo(loadedPlans)
     } catch (error) {
       console.error('予定の取得に失敗しました:', error)
     } finally {
@@ -184,13 +385,28 @@ export default function Page() {
    * フォームを初期化
    */
   function resetForm() {
-    setMountain('')
-    setArea('')
+    setTitle('')
+    setMountainId('')
+    setMountainName('')
     setDate('')
-    setDay('')
     setUndecided(false)
     setEditingId(null)
     setFormError('')
+  }
+
+  function selectMountain(mountain: Mountain) {
+    setMountainId(mountain.id)
+    setMountainName(mountain.name)
+    setSelectedMountain(mountain)
+    setMountainCandidates([])
+    setFormError('')
+  }
+  
+  function handleMountainNameChange(value: string) {
+    setMountainName(value)
+    setMountainId('')
+    setSelectedMountain(null)
+    setMountainCandidates([])
   }
 
   /**
@@ -204,14 +420,36 @@ export default function Page() {
   /**
    * 編集フォームを開く
    */
-  function openEdit(plan: Plan) {
+  async function openEdit(plan: Plan) {
     setEditingId(plan.id)
-    setMountain(plan.mountain)
-    setArea(plan.area)
-    setDate(plan.date)
-    setDay(plan.day)
+    setTitle(plan.title)
+    setDate(plan.date ?? '')
     setUndecided(!plan.fixed)
     setFormError('')
+
+    try {
+      const response = await fetch(
+        `/api/mountains?id=${encodeURIComponent(plan.mountainId)}`
+      )
+
+      if (!response.ok) {
+        throw new Error('山情報の取得に失敗しました')
+      }
+
+      const mountain = await response.json()
+
+      if (!mountain) {
+        throw new Error('山情報が見つかりませんでした')
+      }
+
+      setMountainId(mountain.id)
+      setMountainName(mountain.name)
+      setSelectedMountain(mountain)
+    } catch (error) {
+      console.error('編集対象の山情報取得に失敗しました:', error)
+      setFormError('山情報の取得に失敗しました。')
+    }
+
     setIsFormOpen(true)
   }
 
@@ -220,62 +458,88 @@ export default function Page() {
    */
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    
+
     if (
-      !mountain.trim() ||
-      !area.trim() ||
+      !mountainId ||
+      !selectedMountain ||
       (!undecided && !date)
     ) {
       setFormError(
-        '山名・エリアと、日程または「未定」を入力してください。'
+        '山名を候補から選択し、日程または「日程未定」を入力してください。'
       )
       return
     }
-    
+
     setSaving(true)
     setFormError('')
-    
-    /**
-     * 保存するデータ
-     */
-    const planData = {
-      mountain: mountain.trim(),
-      area: area.trim(),
-      date: undecided ? null : date,
-      day: undecided ? null : day,
-      weather: '晴れ',
-      rain: 20,
-      wind: 3,
-      fixed: !undecided,
-    }
-    
+
     try {
+      let weather = '不明'
+      let weatherCode: number | null = null
+      let rain = 0
+      let wind = 0
+
+      // 日程が決まっている場合だけ天気を取得
+      if (!undecided && date) {
+        const weatherResponse = await fetch(
+          `/api/weather?latitude=${encodeURIComponent(
+            selectedMountain.latitude
+          )}&longitude=${encodeURIComponent(
+            selectedMountain.longitude
+          )}&date=${encodeURIComponent(date)}`
+        )
+
+        if (!weatherResponse.ok) {
+          console.warn(
+            '天気予報がまだ取得できないため、予報待ちとして登録します'
+          )
+        } else {
+          const weatherData = await weatherResponse.json()
+
+          weather = weatherData.weather ?? '不明'
+          weatherCode = weatherData.weatherCode ?? null
+          rain = weatherData.rain ?? 0
+          wind = weatherData.wind ?? 0
+        }
+      }
+
+      // タイトル未入力なら山名を使用
+      const finalTitle =
+        (title ?? '').trim() || selectedMountain.name
+
+      const planData = {
+        title: finalTitle,
+        mountainId: selectedMountain.id,
+        date: undecided ? null : date,
+        weather,
+        weatherCode,
+        rain,
+        wind,
+        fixed: !undecided,
+      }
+
       // =========================
       // ゲストモード
       // =========================
       if (!isLoggedIn) {
-        // 編集
         if (editingId !== null) {
           const updatedPlan: Plan = {
             id: editingId,
             ...planData,
           }
-          
+
           updateGuestPlan(updatedPlan)
-        }
-        
-        // 新規登録
-        else {
+        } else {
           const newPlan: Plan = {
             id: crypto.randomUUID(),
             ...planData,
           }
-          
+
           addGuestPlan(newPlan)
         }
-        // localStorageから最新状態を取得
+
         await fetchPlans(false)
-        
+
         setIsFormOpen(false)
         resetForm()
         return
@@ -284,7 +548,7 @@ export default function Page() {
       // =========================
       // ログインモード
       // =========================
-      
+
       // 編集
       if (editingId !== null) {
         const response = await fetch(
@@ -297,12 +561,12 @@ export default function Page() {
             body: JSON.stringify(planData),
           }
         )
-        
+
         if (!response.ok) {
           throw new Error('予定の更新に失敗しました')
         }
       }
-      
+
       // 新規登録
       else {
         const response = await fetch('/api/plans', {
@@ -312,20 +576,19 @@ export default function Page() {
           },
           body: JSON.stringify(planData),
         })
-        
+
         if (!response.ok) {
           throw new Error('予定の登録に失敗しました')
         }
       }
-      
-      // DBの最新状態を再取得
+
       await fetchPlans(true)
-      
+
       setIsFormOpen(false)
       resetForm()
     } catch (error) {
-      console.error(error)
-      
+      console.error('予定の保存に失敗しました:', error)
+
       if (editingId !== null) {
         setFormError('予定の更新に失敗しました。')
       } else {
@@ -375,7 +638,15 @@ export default function Page() {
   /**
    * 日程確定済み / 日程未定に分類
    */
-  const fixedPlans = plans.filter((plan) => plan.fixed)
+  const fixedPlans = [...plans]
+    .filter((plan) => plan.fixed)
+    .sort((a, b) => {
+      if (!a.date) return 1
+      if (!b.date) return -1
+
+      return a.date.localeCompare(b.date)
+    })
+
   const undecidedPlans = plans.filter((plan) => !plan.fixed)
 
   /**
@@ -514,6 +785,7 @@ export default function Page() {
               <PlanCard
                 key={plan.id}
                 plan={plan}
+                mountain={mountainsById[plan.mountainId] ?? null}
                 onEdit={openEdit}
                 onDelete={removePlan}
               />
@@ -547,6 +819,7 @@ export default function Page() {
                 <PlanCard
                   key={plan.id}
                   plan={plan}
+                  mountain={mountainsById[plan.mountainId] ?? null}
                   onEdit={openEdit}
                   onDelete={removePlan}
                   compact
@@ -629,94 +902,117 @@ export default function Page() {
 
             <form onSubmit={handleSubmit}>
 
+              {/* タイトル */}
+              <label>
+                タイトル（任意）
+                
+                <input
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder="例：秋の高尾山ハイキング"
+                />
+              </label>
               {/* 山名 */}
               <label>
                 山名
-
-                <input
-                  value={mountain}
+                <div className="mountain-search">
+                  <input
+                  value={mountainName}
                   onChange={(event) =>
-                    setMountain(event.target.value)
+                    handleMountainNameChange(event.target.value)
                   }
                   placeholder="例：高尾山"
-                />
-              </label>
-
-              {/* エリア */}
-              <label>
-                エリア
-
-                <input
-                  value={area}
-                  onChange={(event) =>
-                    setArea(event.target.value)
-                  }
-                  placeholder="例：東京・八王子"
-                />
-              </label>
-
-              {/* 日付・曜日 */}
-              <div className="form-row">
-                <label>
-                  日付
-
-                  <input
-                    type="date"
-                    value={date}
-                    disabled={undecided}
-                    onChange={(event) =>
-                      setDate(event.target.value)
-                    }
+                  autoComplete="off"
                   />
-                </label>
-
-                <label>
-                  曜日
-
-                  <select
-                    value={day}
-                    disabled={undecided}
-                    onChange={(event) =>
-                      setDay(event.target.value)
-                    }
+                  
+                  {isMountainSearching && (
+                    <p className="search-status">
+                      山を検索しています...
+                      </p>
+                    )
+                  }
+                  
+                  {!isMountainSearching &&
+                  mountainCandidates.length > 0 && (
+                  <div className="mountain-candidates">
+                    {mountainCandidates.map((mountain) => (
+                      <button
+                      key={mountain.id}
+                      type="button"
+                      className="mountain-candidate"
+                      onClick={() => selectMountain(mountain)}
+                      >
+                        <strong>{mountain.name}</strong>
+                        <span>
+                          {mountain.area}
+                          {mountain.elevation
+                          ? ` ・ ${mountain.elevation}m`
+                          : ''}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {!isMountainSearching &&
+                mountainName.trim() &&
+                !mountainId &&
+                mountainCandidates.length === 0 && (
+                <p className="search-status">
+                  該当する山がありません
+                  </p>
+                )}
+                </div>
+              </label>
+              {/* 選択した山 */}
+              {mountainId && (
+                <div className="selected-mountain">
+                  <span>
+                    選択中：<strong>{mountainName}</strong>
+                  </span>
+                  
+                  <button
+                  type="button"
+                  onClick={() => {
+                    setMountainId('')
+                    setMountainName('')
+                    setSelectedMountain(null)
+                    setMountainCandidates([])
+                  }}
                   >
-                    <option value="">
-                      選択
-                    </option>
-
-                    <option value="土">
-                      土
-                    </option>
-
-                    <option value="日">
-                      日
-                    </option>
-
-                    <option value="祝">
-                      祝
-                    </option>
-                  </select>
-                </label>
-              </div>
-
+                    変更
+                  </button>
+                </div>
+              )}
+              
+              {/* 日付 */}
+              <label>
+                日付
+                
+                <input
+                type="date"
+                value={date}
+                disabled={undecided}
+                onChange={(event) => setDate(event.target.value)}
+                />
+              </label>
+              
               {/* 日程未定 */}
               <label className="check-label">
                 <input
-                  type="checkbox"
-                  checked={undecided}
-                  onChange={(event) => {
-                    setUndecided(
-                      event.target.checked
-                    )
-
-                    if (event.target.checked) {
-                      setDate('')
-                      setDay('')
-                    }
-                  }}
+                type="checkbox"
+                checked={undecided}
+                onChange={(event) => {
+                  const checked = event.target.checked
+                  
+                  setUndecided(checked)
+                  
+                  if (checked) {
+                    setDate('')
+                  }
+                }}
                 />
-
-                <span>日程は未定</span>
+                
+                日程未定
               </label>
 
               {/* エラー */}
@@ -781,29 +1077,35 @@ export default function Page() {
             </p>
 
             <div className="suggestion-list">
-              {sortedAlternatives.map((plan) => (
-                <div
-                  className="suggestion-row"
-                  key={plan.id}
-                >
-                  <div>
-                    <strong>
-                      {plan.mountain}
-                    </strong>
+              {sortedAlternatives.map((plan) => {
+                const mountain = mountainsById[plan.mountainId]
 
-                    <span>
-                      {plan.area}
+                return (
+                  <div
+                    className="suggestion-row"
+                    key={plan.id}
+                  >
+                    <div>
+                      <strong>
+                        {plan.title}
+                      </strong>
 
-                      {plan.date &&
-                        ` ・ ${plan.date}`}
-                    </span>
+                      <span>
+                        {mountain
+                          ? `${mountain.name}（${mountain.area}）`
+                          : '山情報不明'}
+
+                        {plan.date &&
+                          ` ・ ${plan.date}`}
+                      </span>
+                    </div>
+
+                    <Rating
+                      rating={getRating(plan)}
+                    />
                   </div>
-
-                  <Rating
-                    rating={getRating(plan)}
-                  />
-                </div>
-              ))}
+                )
+              })}
 
               {sortedAlternatives.length === 0 && (
                 <p className="empty-note">
@@ -833,11 +1135,13 @@ export default function Page() {
  */
 function PlanCard({
   plan,
+  mountain,
   onEdit,
   onDelete,
   compact = false,
 }: {
   plan: Plan
+  mountain: Mountain | null
   onEdit: (plan: Plan) => void
   onDelete: (id: string) => void
   compact?: boolean
@@ -857,11 +1161,11 @@ function PlanCard({
           {plan.fixed ? (
             <>
               <strong>
-                {plan.date}
+                {plan.date ? formatDateWithWeekday(plan.date) : '日程未定'}
               </strong>
 
               <span>
-                {plan.day}曜日
+                お出かけ予定
               </span>
             </>
           ) : (
@@ -882,7 +1186,7 @@ function PlanCard({
           <button
             type="button"
             onClick={() => onEdit(plan)}
-            aria-label={`${plan.mountain}を編集`}
+            aria-label={`${mountain?.name ?? '山情報不明'}を編集`}
           >
             <Edit3 size={16} />
           </button>
@@ -890,7 +1194,7 @@ function PlanCard({
           <button
             type="button"
             onClick={() => onDelete(plan.id)}
-            aria-label={`${plan.mountain}を削除`}
+            aria-label={`${mountain?.name ?? '山情報不明'}を削除`}
           >
             <Trash2 size={16} />
           </button>
@@ -899,11 +1203,13 @@ function PlanCard({
 
       {/* 山情報 */}
       <div className="mountain-info">
-        <h3>{plan.mountain}</h3>
+        <h3>{plan.title}</h3>
 
         <span>
           <MapPin size={14} />
-          {plan.area}
+          {mountain
+            ? `${mountain.name}（${mountain.area}）`
+            : '山情報不明'}
         </span>
       </div>
 

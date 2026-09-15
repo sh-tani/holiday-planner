@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 export async function GET() {
   try {
     const supabase = await createClient()
+
     const {
       data: { user },
       error: userError,
@@ -31,9 +32,22 @@ export async function GET() {
       )
     }
 
-    return NextResponse.json(data ?? [])
+    // DBのカラム名をPlan型に合わせる
+    const plans = (data ?? []).map((plan) => ({
+      id: plan.id,
+      title: plan.title ?? '',
+      mountainId: plan.mountain_id,
+      date: plan.date,
+      weather: plan.weather ?? '不明',
+      weatherCode: plan.weather_code ?? null,
+      rain: plan.rain ?? 0,
+      wind: plan.wind ?? 0,
+      fixed: plan.fixed ?? true,
+    }))
+
+    return NextResponse.json(plans)
   } catch (error) {
-    console.error(error)
+    console.error('予定取得APIでエラーが発生しました:', error)
 
     return NextResponse.json(
       { error: 'サーバーエラーが発生しました。' },
@@ -46,46 +60,51 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const supabase = await createClient()
+
     const {
       data: { user },
       error: userError,
     } = await supabase.auth.getUser()
+
     if (userError || !user) {
       return NextResponse.json(
         { error: 'ログインが必要です。' },
         { status: 401 }
       )
     }
+
     const body = await request.json()
 
     const {
-      mountain,
-      area,
+      title,
+      mountainId,
       date,
-      day,
       weather,
+      weatherCode,
       rain,
       wind,
       fixed,
     } = body
 
-    if (!mountain?.trim() || !area?.trim()) {
+    // 必須チェック
+    if (!mountainId) {
       return NextResponse.json(
-        { error: '山名とエリアは必須です。' },
+        { error: '山の選択は必須です。' },
         { status: 400 }
       )
     }
 
+    // 登録
     const { data, error } = await supabase
       .from('schedule')
       .insert({
-        mountain: mountain.trim(),
-        area: area.trim(),
+        title: title ?? '',
+        mountain_id: mountainId,
         date: date || null,
-        day: day || null,
-        weather: weather ?? '晴れ',
-        rain: rain ?? 20,
-        wind: wind ?? 3,
+        weather: weather ?? '不明',
+        weather_code: weatherCode ?? null,
+        rain: rain ?? 0,
+        wind: wind ?? 0,
         fixed: fixed ?? true,
         user_id: user.id,
       })
@@ -96,14 +115,30 @@ export async function POST(request: Request) {
       console.error('予定の登録に失敗しました:', error)
 
       return NextResponse.json(
-        { error: '予定の登録に失敗しました。' },
+        {
+          error: '予定の登録に失敗しました。',
+          details: error.message,
+        },
         { status: 500 }
       )
     }
 
-    return NextResponse.json(data, { status: 201 })
+    // DBのカラム名をPlan型に合わせる
+    const plan = {
+      id: data.id,
+      title: data.title ?? '',
+      mountainId: data.mountain_id,
+      date: data.date,
+      weather: data.weather ?? '不明',
+      weatherCode: data.weather_code ?? null,
+      rain: data.rain ?? 0,
+      wind: data.wind ?? 0,
+      fixed: data.fixed ?? true,
+    }
+
+    return NextResponse.json(plan, { status: 201 })
   } catch (error) {
-    console.error(error)
+    console.error('予定登録APIでエラーが発生しました:', error)
 
     return NextResponse.json(
       { error: 'サーバーエラーが発生しました。' },
