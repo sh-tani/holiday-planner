@@ -2,7 +2,12 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { getGuestPlans } from "@/lib/guestStorage"
+import {
+  getPlans,
+  createPlan,
+  updatePlan,
+  deletePlan,
+} from '@/lib/plans/api'
 import {
   CalendarDays,
   Check,
@@ -21,20 +26,15 @@ import {
 import type { Plan } from "@/lib/types"
 import { getRating } from '@/lib/planner/rating'
 import { formatDateWithWeekday } from '@/lib/planner/date'
+import PlanCard from '@/components/planner/PlanCard'
 import {
-  addGuestPlan,
-  updateGuestPlan,
-  deleteGuestPlan,
-} from "@/lib/guestStorage"
-
-type Mountain = {
-  id: string
-  name: string
-  area: string
-  latitude: number
-  longitude: number
-  elevation: number | null
-}
+  searchMountains,
+  getMountainsByIds,
+} from '@/lib/mountains/api'
+import type { Mountain } from '@/lib/mountains/api'
+import Rating from '@/components/planner/Rating'
+import EmptyState from '@/components/planner/EmptyState'
+import PlanFormModal from '@/components/planner/PlanFormModal'
 
 export default function Page() {
   const [plans, setPlans] = useState<Plan[]>([])
@@ -87,17 +87,8 @@ export default function Page() {
       try {
         setIsMountainSearching(true)
 
-        const response = await fetch(
-          `/api/mountains?query=${encodeURIComponent(query)}`
-        )
-
-        if (!response.ok) {
-          throw new Error('山情報の取得に失敗しました')
-        }
-
-        const data = await response.json()
-
-        setMountainCandidates(data ?? [])
+        const data = await searchMountains(query)
+        setMountainCandidates(data)
       } catch (error) {
         console.error('山の検索に失敗しました:', error)
         setMountainCandidates([])
@@ -133,72 +124,22 @@ export default function Page() {
     }
   }
 
-  async function fetchMountainInfo(loadedPlans: Plan[]) {
-    const mountainIds = [
-      ...new Set(
-        loadedPlans
-          .map((plan) => plan.mountainId)
-          .filter(Boolean)
-      ),
-    ]
-
-    const mountainResults = await Promise.all(
-      mountainIds.map(async (id) => {
-        try {
-          const response = await fetch(
-            `/api/mountains?id=${encodeURIComponent(id)}`
-          )
-
-          if (!response.ok) {
-            return null
-          }
-
-          return (await response.json()) as Mountain
-        } catch (error) {
-          console.error(
-            `山情報の取得に失敗しました: ${id}`,
-            error
-          )
-          return null
-        }
-      })
-    )
-
-    const mountainMap: Record<string, Mountain> = {}
-
-    mountainResults.forEach((mountain) => {
-      if (mountain) {
-        mountainMap[mountain.id] = mountain
-      }
-    })
-
-    setMountainsById(mountainMap)
-  }
-
   async function fetchPlans(loggedIn: boolean) {
     setLoading(true)
 
     try {
-      if (!loggedIn) {
-        const guestPlans = getGuestPlans()
-
-        setPlans(guestPlans)
-        await fetchMountainInfo(guestPlans)
-
-        return
-      }
-
-      const response = await fetch('/api/plans')
-
-      if (!response.ok) {
-        throw new Error('予定の取得に失敗しました')
-      }
-
-      const data = await response.json()
-      const loadedPlans: Plan[] = data ?? []
+      const loadedPlans = await getPlans(loggedIn)
 
       setPlans(loadedPlans)
-      await fetchMountainInfo(loadedPlans)
+
+      const mountainIds = loadedPlans.map(
+        (plan) => plan.mountainId
+      )
+
+      const mountainMap =
+        await getMountainsByIds(mountainIds)
+
+      setMountainsById(mountainMap)
     } catch (error) {
       console.error('予定の取得に失敗しました:', error)
     } finally {
@@ -285,6 +226,13 @@ export default function Page() {
     setFormError('')
   }
   
+  function clearMountain() {
+    setMountainId('')
+    setMountainName('')
+    setSelectedMountain(null)
+    setMountainCandidates([])
+  }
+
   function handleMountainNameChange(value: string) {
     setMountainName(value)
     setMountainId('')
@@ -402,73 +350,26 @@ export default function Page() {
       }
 
       // =========================
-      // ゲストモード
+      // 予定の登録・更新
       // =========================
-      if (!isLoggedIn) {
-        if (editingId !== null) {
-          const updatedPlan: Plan = {
-            id: editingId,
-            ...planData,
-          }
-
-          updateGuestPlan(updatedPlan)
-        } else {
-          const newPlan: Plan = {
-            id: crypto.randomUUID(),
-            ...planData,
-          }
-
-          addGuestPlan(newPlan)
-        }
-
-        await fetchPlans(false)
-
-        setIsFormOpen(false)
-        resetForm()
-        return
-      }
-
-      // =========================
-      // ログインモード
-      // =========================
-
-      // 編集
       if (editingId !== null) {
-        const response = await fetch(
-          `/api/plans/${editingId}`,
-          {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(planData),
-          }
+        await updatePlan(
+          editingId,
+          planData,
+          isLoggedIn
         )
-
-        if (!response.ok) {
-          throw new Error('予定の更新に失敗しました')
-        }
+      } else {
+        await createPlan(
+          planData,
+          isLoggedIn
+        )
       }
 
-      // 新規登録
-      else {
-        const response = await fetch('/api/plans', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(planData),
-        })
-
-        if (!response.ok) {
-          throw new Error('予定の登録に失敗しました')
-        }
-      }
-
-      await fetchPlans(true)
+      await fetchPlans(isLoggedIn)
 
       setIsFormOpen(false)
       resetForm()
+
     } catch (error) {
       console.error('予定の保存に失敗しました:', error)
 
@@ -490,28 +391,9 @@ export default function Page() {
 
     if (!confirmed) return
     try {
-      // =========================
-      // ゲストモード
-      // =========================
-      if (!isLoggedIn) {
-        deleteGuestPlan(id)
+      await deletePlan(id, isLoggedIn)
 
-        await fetchPlans(false)
-        return
-      }
-      
-      // =========================
-      // ログインモード
-      // =========================
-      const response = await fetch(`/api/plans/${id}`, {
-        method: 'DELETE',
-      })
-
-      if (!response.ok) {
-        throw new Error('予定の削除に失敗しました')
-      }
-
-      await fetchPlans(true)
+      await fetchPlans(isLoggedIn)
     } catch (error) {
       console.error('予定の削除に失敗しました:', error)
       alert('予定の削除に失敗しました。')
@@ -750,179 +632,42 @@ export default function Page() {
       </div>
 
       {/* 予定登録・編集モーダル */}
-      {isFormOpen && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-        >
-          <section
-            className="modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="form-title"
-          >
-            <button
-              className="close-button"
-              type="button"
-              onClick={() => {
-                setIsFormOpen(false)
-                resetForm()
-              }}
-              aria-label="閉じる"
-            >
-              <X size={20} />
-            </button>
+      <PlanFormModal
+        isOpen={isFormOpen}
+        editingId={editingId}
+        formError={formError}
+        saving={saving}
 
-            <p className="section-kicker">
-              NEW PLAN
-            </p>
+        title={title}
+        mountainId={mountainId}
+        mountainName={mountainName}
+        mountainCandidates={mountainCandidates}
+        isMountainSearching={isMountainSearching}
+        selectedMountain={selectedMountain}
 
-            <h2 id="form-title">
-              {editingId
-                ? '予定を編集'
-                : '予定を登録'}
-            </h2>
+        date={date}
+        undecided={undecided}
 
-            <form onSubmit={handleSubmit}>
+        onClose={() => {
+          setIsFormOpen(false)
+          resetForm()
+        }}
 
-              {/* タイトル */}
-              <label>
-                タイトル（任意）
-                
-                <input
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                placeholder="例：秋の高尾山ハイキング"
-                />
-              </label>
-              {/* 山名 */}
-              <label>
-                山名
-                <div className="mountain-search">
-                  <input
-                  value={mountainName}
-                  onChange={(event) =>
-                    handleMountainNameChange(event.target.value)
-                  }
-                  placeholder="例：高尾山"
-                  autoComplete="off"
-                  />
-                  
-                  {isMountainSearching && (
-                    <p className="search-status">
-                      山を検索しています...
-                      </p>
-                    )
-                  }
-                  
-                  {!isMountainSearching &&
-                  mountainCandidates.length > 0 && (
-                  <div className="mountain-candidates">
-                    {mountainCandidates.map((mountain) => (
-                      <button
-                      key={mountain.id}
-                      type="button"
-                      className="mountain-candidate"
-                      onClick={() => selectMountain(mountain)}
-                      >
-                        <strong>{mountain.name}</strong>
-                        <span>
-                          {mountain.area}
-                          {mountain.elevation
-                          ? ` ・ ${mountain.elevation}m`
-                          : ''}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {!isMountainSearching &&
-                mountainName.trim() &&
-                !mountainId &&
-                mountainCandidates.length === 0 && (
-                <p className="search-status">
-                  該当する山がありません
-                  </p>
-                )}
-                </div>
-              </label>
-              {/* 選択した山 */}
-              {mountainId && (
-                <div className="selected-mountain">
-                  <span>
-                    選択中：<strong>{mountainName}</strong>
-                  </span>
-                  
-                  <button
-                  type="button"
-                  onClick={() => {
-                    setMountainId('')
-                    setMountainName('')
-                    setSelectedMountain(null)
-                    setMountainCandidates([])
-                  }}
-                  >
-                    変更
-                  </button>
-                </div>
-              )}
-              
-              {/* 日付 */}
-              <label>
-                日付
-                
-                <input
-                type="date"
-                value={date}
-                disabled={undecided}
-                onChange={(event) => setDate(event.target.value)}
-                />
-              </label>
-              
-              {/* 日程未定 */}
-              <label className="check-label">
-                <input
-                type="checkbox"
-                checked={undecided}
-                onChange={(event) => {
-                  const checked = event.target.checked
-                  
-                  setUndecided(checked)
-                  
-                  if (checked) {
-                    setDate('')
-                  }
-                }}
-                />
-                
-                日程未定
-              </label>
+        onSubmit={handleSubmit}
 
-              {/* エラー */}
-              {formError && (
-                <p className="form-error">
-                  {formError}
-                </p>
-              )}
+        onTitleChange={setTitle}
+        onMountainNameChange={handleMountainNameChange}
+        onSelectMountain={selectMountain}
+        onClearMountain={clearMountain}
+        onDateChange={setDate}
+        onUndecidedChange={(checked) => {
+          setUndecided(checked)
 
-              {/* 保存 */}
-              <button
-                className="primary-button submit-button"
-                type="submit"
-                disabled={saving}
-              >
-                {saving
-                  ? '保存中...'
-                  : editingId
-                    ? '変更を保存'
-                    : '予定を追加'}
-
-                <Check size={17} />
-              </button>
-            </form>
-          </section>
-        </div>
-      )}
+          if (checked) {
+            setDate('')
+          }
+        }}
+      />
 
       {/* 代替プランモーダル */}
       {isAlternativesOpen && (
@@ -1010,196 +755,5 @@ export default function Page() {
         </div>
       )}
     </main>
-  )
-}
-
-/**
- * 予定カード
- */
-function PlanCard({
-  plan,
-  mountain,
-  onEdit,
-  onDelete,
-  compact = false,
-}: {
-  plan: Plan
-  mountain: Mountain | null
-  onEdit: (plan: Plan) => void
-  onDelete: (id: string) => void
-  compact?: boolean
-}) {
-  const rating = getRating(plan)
-
-  return (
-    <article
-      className={`plan-card ${
-        compact ? 'compact-card' : ''
-      }`}
-    >
-      <div className="card-top">
-
-        {/* 日付 */}
-        <div className="date-block">
-          {plan.fixed ? (
-            <>
-              <strong>
-                {plan.date ? formatDateWithWeekday(plan.date) : '日程未定'}
-              </strong>
-
-              <span>
-                お出かけ予定
-              </span>
-            </>
-          ) : (
-            <>
-              <strong>
-                日程未定
-              </strong>
-
-              <span>
-                候補として保存中
-              </span>
-            </>
-          )}
-        </div>
-
-        {/* 編集・削除 */}
-        <div className="card-actions">
-          <button
-            type="button"
-            onClick={() => onEdit(plan)}
-            aria-label={`${mountain?.name ?? '山情報不明'}を編集`}
-          >
-            <Edit3 size={16} />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onDelete(plan.id)}
-            aria-label={`${mountain?.name ?? '山情報不明'}を削除`}
-          >
-            <Trash2 size={16} />
-          </button>
-        </div>
-      </div>
-
-      {/* 山情報 */}
-      <div className="mountain-info">
-        <h3>{plan.title}</h3>
-
-        <span>
-          <MapPin size={14} />
-          {mountain
-            ? `${mountain.name}（${mountain.area}）`
-            : '山情報不明'}
-        </span>
-      </div>
-
-      {/* 天気 */}
-      <div className="weather-row">
-
-        <div>
-          <span className="weather-label">
-            <CloudSun size={16} />
-            予報
-          </span>
-
-          <strong>
-            {plan.weather}
-          </strong>
-        </div>
-
-        <div>
-          <span className="weather-label">
-            <CloudSun size={16} />
-            降水確率
-          </span>
-
-          <strong>
-            {plan.rain}%
-          </strong>
-        </div>
-
-        <div>
-          <span className="weather-label">
-            <Wind size={16} />
-            風速
-          </span>
-
-          <strong>
-            {plan.wind}m/s
-          </strong>
-        </div>
-      </div>
-
-      {/* おすすめ度 */}
-      <Rating rating={rating} />
-    </article>
-  )
-}
-
-/**
- * おすすめ度
- */
-function Rating({
-  rating,
-}: {
-  rating: ReturnType<typeof getRating>
-}) {
-  return (
-    <div
-      className={`rating ${rating.tone}`}
-    >
-      <span className="rating-score">
-        {rating.score}
-      </span>
-
-      <span>
-        <strong>
-          {rating.label}
-        </strong>
-
-        <small>
-          お出かけしやすさ
-        </small>
-      </span>
-
-      <span className="rating-bar">
-        <i
-          style={{
-            width: `${rating.score}%`,
-          }}
-        />
-      </span>
-    </div>
-  )
-}
-
-/**
- * 予定がない場合
- */
-function EmptyState({
-  onClick,
-}: {
-  onClick: () => void
-}) {
-  return (
-    <div className="empty-state">
-      <CalendarDays size={28} />
-
-      <p>
-        今週の予定はまだありません。
-      </p>
-
-      <button
-        className="text-button"
-        type="button"
-        onClick={onClick}
-      >
-        最初の予定を登録する
-        <ChevronRight size={15} />
-      </button>
-    </div>
   )
 }

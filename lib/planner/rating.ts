@@ -1,9 +1,15 @@
 import type { Plan } from '@/lib/types'
 
+export type RatingResult = {
+  label: string
+  tone: 'good' | 'caution' | 'bad'
+  score: number
+}
+
 /**
  * 天気情報からおすすめ度を計算
  */
-export function getRating(plan: Plan) {
+export function getRating(plan: Plan): RatingResult {
   // 日程未定
   if (!plan.date) {
     return {
