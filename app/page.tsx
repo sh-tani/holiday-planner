@@ -526,14 +526,27 @@ export default function Page() {
             <h2>今週の予定</h2>
           </div>
 
-          <button
-            className="primary-button"
-            type="button"
-            onClick={openCreate}
-          >
-            <Plus size={18} />
-            予定を登録
-          </button>
+          <div className="section-actions">
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => {
+                window.location.href = '/mountains'
+              }}
+            >
+              <MapPin size={18} />
+              山を探す
+            </button>
+
+            <button
+              className="primary-button"
+              type="button"
+              onClick={openCreate}
+            >
+              <Plus size={18} />
+              予定を登録
+            </button>
+          </div>
         </section>
 
         {/* 読み込み中 */}

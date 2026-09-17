@@ -31,16 +31,31 @@ export async function GET(request: Request) {
     }
 
     // キーワード検索
-    if (!query) {
-      return NextResponse.json([])
+    if (query) {
+      const { data, error } = await supabase
+        .from('mountains')
+        .select('id, name, area, latitude, longitude, elevation')
+        .ilike('name', `%${query}%`)
+        .order('name')
+        .limit(10)
+
+      if (error) {
+        console.error('山情報の取得に失敗しました:', error)
+
+        return NextResponse.json(
+          { error: '山情報の取得に失敗しました' },
+          { status: 500 }
+        )
+      }
+
+      return NextResponse.json(data ?? [])
     }
 
+    // クエリなし → 全山取得
     const { data, error } = await supabase
       .from('mountains')
       .select('id, name, area, latitude, longitude, elevation')
-      .ilike('name', `%${query}%`)
       .order('name')
-      .limit(10)
 
     if (error) {
       console.error('山情報の取得に失敗しました:', error)
