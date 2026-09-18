@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     if (id) {
       const { data, error } = await supabase
         .from('mountains')
-        .select('id, name, area, latitude, longitude, elevation')
+        .select('id, name, area, prefecture, latitude, longitude, elevation')
         .eq('id', id)
         .single()
 
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
     if (query) {
       const { data, error } = await supabase
         .from('mountains')
-        .select('id, name, area, latitude, longitude, elevation')
+        .select('id, name, area, prefecture, latitude, longitude, elevation')
         .ilike('name', `%${query}%`)
         .order('name')
         .limit(10)
@@ -54,7 +54,7 @@ export async function GET(request: Request) {
     // クエリなし → 全山取得
     const { data, error } = await supabase
       .from('mountains')
-      .select('id, name, area, latitude, longitude, elevation')
+      .select('id, name, area, prefecture, latitude, longitude, elevation')
       .order('name')
 
     if (error) {
