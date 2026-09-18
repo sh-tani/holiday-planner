@@ -48,12 +48,31 @@ export default function MountainMap({ mountains }: Props) {
             <strong>{mountain.name}</strong>
             <br />
             {mountain.area}
+
             {mountain.elevation && (
               <>
                 <br />
                 標高 {mountain.elevation}m
               </>
             )}
+
+            <div style={{ marginTop: "10px" }}>
+              <a
+                href={`/?mountainId=${encodeURIComponent(mountain.id)}`}
+                style={{
+                  display: "inline-block",
+                  padding: "7px 10px",
+                  borderRadius: "8px",
+                  background: "#2563eb",
+                  color: "#fff",
+                  textDecoration: "none",
+                  fontSize: "12px",
+                  fontWeight: 700,
+                }}
+              >
+                この山で予定登録
+              </a>
+            </div>
           </Popup>
         </Marker>
       ))}
