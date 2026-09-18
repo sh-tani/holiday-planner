@@ -13,7 +13,6 @@ import {
   Check,
   ChevronRight,
   CloudSun,
-  Compass,
   Edit3,
   MapPin,
   Plus,
@@ -66,6 +65,51 @@ export default function Page() {
   // APIから予定を取得
   useEffect(() => {
     checkAuth()
+  }, [])
+
+  useEffect(() => {
+    const mountainIdFromUrl =
+      new URLSearchParams(window.location.search).get('mountainId')
+
+    if (typeof mountainIdFromUrl !== 'string' || mountainIdFromUrl.length === 0) {
+      return
+    }
+
+    async function openMountainPlanForm() {
+      try {
+        const response = await fetch(
+          `/api/mountains?id=${encodeURIComponent(mountainIdFromUrl!)}`
+        )
+
+        if (!response.ok) {
+          throw new Error('山情報の取得に失敗しました')
+        }
+
+        const mountain = await response.json()
+
+        if (!mountain) {
+          throw new Error('山情報が見つかりませんでした')
+        }
+
+        resetForm()
+
+        setMountainId(mountain.id)
+        setMountainName(mountain.name)
+        setSelectedMountain(mountain)
+
+        setIsFormOpen(true)
+
+        // URLからmountainIdを消す
+        window.history.replaceState({}, '', '/')
+      } catch (error) {
+        console.error(
+          '山情報の取得に失敗しました:',
+          error
+        )
+      }
+    }
+
+    openMountainPlanForm()
   }, [])
   
   useEffect(() => {
@@ -216,6 +260,8 @@ export default function Page() {
     setUndecided(false)
     setEditingId(null)
     setFormError('')
+    setSelectedMountain(null)
+    setMountainCandidates([])
   }
 
   function selectMountain(mountain: Mountain) {
@@ -428,53 +474,6 @@ export default function Page() {
 
   return (
     <main className="planner-shell">
-      {/* ヘッダー */}
-      <header className="site-header">
-        <a
-          className="brand"
-          href="#top"
-          aria-label="休日プランナー ホーム"
-        >
-          <span className="brand-mark">
-            <Compass size={20} />
-          </span>
-
-          <span>休日プランナー</span>
-        </a>
-        {isLoggedIn ? (
-          <div className="header-actions">
-            <span className="user-name">
-              {userName ? `${userName}さん` : ''}
-            </span>
-            
-            <button
-             type="button"
-             onClick={handleLogout}
-             className="login-button"
-            >
-              ログアウト
-              <ChevronRight size={16} />
-            </button>
-          </div>
-        ) : (
-         <div className="header-actions">
-           <span className="guest-label">
-             ゲスト利用中
-           </span>
-           
-           <button
-            type="button"
-            onClick={() => {
-              window.location.href = '/auth/login'
-             }}
-           className="login-button"
-           >
-             ログイン
-             <ChevronRight size={16} />
-           </button>
-         </div>
-        )}
-      </header>
 
       <div id="top" className="page-content">
 
