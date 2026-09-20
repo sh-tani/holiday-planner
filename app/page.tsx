@@ -449,16 +449,42 @@ export default function Page() {
   /**
    * 日程確定済み / 日程未定に分類
    */
-  const fixedPlans = [...plans]
-    .filter((plan) => plan.fixed)
-    .sort((a, b) => {
-      if (!a.date) return 1
-      if (!b.date) return -1
+  const fixedPlans = useMemo(() => {
+    const now = new Date()
 
-      return a.date.localeCompare(b.date)
-    })
+    const today = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    )
 
-  const undecidedPlans = plans.filter((plan) => !plan.fixed)
+    const oneWeekLater = new Date(today)
+    oneWeekLater.setDate(oneWeekLater.getDate() + 6)
+
+    const toDateString = (date: Date) => {
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, "0")
+      const day = String(date.getDate()).padStart(2, "0")
+
+      return `${year}-${month}-${day}`
+    }
+
+    const todayString = toDateString(today)
+    const oneWeekLaterString = toDateString(oneWeekLater)
+
+    return [...plans]
+      .filter((plan) => {
+        if (!plan.fixed || !plan.date) {
+          return false
+        }
+
+        return (
+          plan.date >= todayString &&
+          plan.date <= oneWeekLaterString
+        )
+      })
+      .sort((a, b) => a.date!.localeCompare(b.date!))
+  }, [plans])
 
   /**
    * おすすめ度順に並び替え
@@ -530,6 +556,17 @@ export default function Page() {
               className="secondary-button"
               type="button"
               onClick={() => {
+                window.location.href = '/plans'
+              }}
+            >
+              <CalendarDays size={18} />
+              予定一覧
+            </button>
+            
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => {
                 window.location.href = '/mountains'
               }}
             >
@@ -573,42 +610,6 @@ export default function Page() {
             )}
           </section>
         )}
-
-        {/* 日程未定 */}
-        <section className="undecided-section">
-          <div className="section-heading compact">
-            <div>
-              <p className="section-kicker">
-                FLEXIBLE IDEAS
-              </p>
-
-              <h2>日程未定の予定</h2>
-            </div>
-
-            <span className="count-badge">
-              {undecidedPlans.length}件
-            </span>
-          </div>
-
-          {undecidedPlans.length > 0 ? (
-            <div className="undecided-list">
-              {undecidedPlans.map((plan) => (
-                <PlanCard
-                  key={plan.id}
-                  plan={plan}
-                  mountain={mountainsById[plan.mountainId] ?? null}
-                  onEdit={openEdit}
-                  onDelete={removePlan}
-                  compact
-                />
-              ))}
-            </div>
-          ) : (
-            <p className="empty-note">
-              日程未定の予定はありません。
-            </p>
-          )}
-        </section>
 
         {/* 代替プラン */}
         <section className="alternative-cta">
