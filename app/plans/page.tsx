@@ -14,7 +14,7 @@ import {
   searchMountains,
 } from "@/lib/mountains/api"
 import type { Mountain } from "@/lib/mountains/api"
-import PlanCard from "@/components/planner/PlanCard"
+import PlanListItem from "@/components/planner/PlanListItem"
 import PlanFormModal from "@/components/planner/PlanFormModal"
 
 export default function PlansPage() {
@@ -378,33 +378,40 @@ export default function PlansPage() {
    * 予定を日付順に並べる
    * 日程未定は最後
    */
-  const sortedPlans = useMemo(() => {
-    return [...plans].sort((a, b) => {
-      if (!a.date && !b.date) {
-        return 0
-      }
+    const todayString = (() => {
+        const today = new Date()
+        const year = today.getFullYear()
+        const month = String(today.getMonth() + 1).padStart(2, "0")
+        const day = String(today.getDate()).padStart(2, "0")
 
-      if (!a.date) {
-        return 1
-      }
+        return `${year}-${month}-${day}`
+    })()
 
-      if (!b.date) {
-        return -1
-      }
+    const upcomingPlans = useMemo(() => {
+    return [...plans]
+        .filter(
+        (plan) =>
+            plan.fixed &&
+            plan.date &&
+            plan.date >= todayString
+      )
+        .sort((a, b) => a.date!.localeCompare(b.date!))
+    }, [plans, todayString])
 
-      return a.date.localeCompare(b.date)
-    })
-  }, [plans])
+    const undecidedPlans = useMemo(() => {
+      return [...plans].filter((plan) => !plan.fixed)
+    }, [plans])
 
-  const fixedPlans =
-    sortedPlans.filter(
-      (plan) => plan.fixed
-    )
-
-  const undecidedPlans =
-    sortedPlans.filter(
-      (plan) => !plan.fixed
-    )
+    const pastPlans = useMemo(() => {
+     return [...plans]
+        .filter(
+       (plan) =>
+            plan.fixed &&
+            plan.date &&
+           plan.date < todayString
+       )
+        .sort((a, b) => b.date!.localeCompare(a.date!))
+    }, [plans, todayString])
 
   return (
     <main className="planner-shell">
@@ -428,45 +435,27 @@ export default function PlansPage() {
           </div>
         ) : (
           <>
-            {/* 日程確定済み */}
+            {/* 今後の予定 */}
             <section>
               <div className="section-heading compact">
                 <div>
-                  <p className="section-kicker">
-                    SCHEDULED
-                  </p>
-
-                  <h2>
-                    日程確定済み
-                  </h2>
+                  <p className="section-kicker">UPCOMING</p>
+                  <h2>今後の予定</h2>
                 </div>
-
-                <span className="count-badge">
-                  {fixedPlans.length}件
-                </span>
+                <span className="count-badge">{upcomingPlans.length}件</span>
               </div>
 
-              {fixedPlans.length > 0 ? (
-                <div className="plan-grid">
-                  {fixedPlans.map(
-                    (plan) => (
-                      <PlanCard
+              {upcomingPlans.length > 0 ? (
+                <div className="plan-list">
+                  {upcomingPlans.map((plan) => (
+                    <PlanListItem
                         key={plan.id}
                         plan={plan}
-                        mountain={
-                          mountainsById[
-                            plan.mountainId
-                          ] ?? undefined
-                        }
-                        onEdit={
-                          openEdit
-                        }
-                        onDelete={
-                          removePlan
-                        }
-                      />
-                    )
-                  )}
+                        mountain={mountainsById[plan.mountainId] ?? undefined}
+                        onEdit={openEdit}
+                        onDelete={removePlan}
+                    />
+                  ))}
                 </div>
               ) : (
                 <p className="empty-note">
@@ -494,24 +483,14 @@ export default function PlansPage() {
               </div>
 
               {undecidedPlans.length > 0 ? (
-                <div className="undecided-list">
-                  {undecidedPlans.map(
-                    (plan) => (
-                      <PlanCard
+                <div className="plan-list">
+                  {undecidedPlans.map((plan) => (
+                      <PlanListItem
                         key={plan.id}
                         plan={plan}
-                        mountain={
-                          mountainsById[
-                            plan.mountainId
-                          ] ?? undefined
-                        }
-                        onEdit={
-                          openEdit
-                        }
-                        onDelete={
-                          removePlan
-                        }
-                        compact
+                        mountain={mountainsById[plan.mountainId] ?? undefined}
+                        onEdit={openEdit}
+                        onDelete={removePlan}
                       />
                     )
                   )}
@@ -521,6 +500,35 @@ export default function PlansPage() {
                   日程未定の予定はありません。
                 </p>
               )}
+            </section>
+
+            {/* 過去の予定 */}
+            <section className="past-section">
+            <div className="section-heading compact">
+                <div>
+                <p className="section-kicker">PAST PLANS</p>
+                <h2>過去の予定</h2>
+                </div>
+                <span className="count-badge">{pastPlans.length}件</span>
+            </div>
+
+            {pastPlans.length > 0 ? (
+                <div className="plan-list">
+                {pastPlans.map((plan) => (
+                    <PlanListItem
+                    key={plan.id}
+                    plan={plan}
+                    mountain={mountainsById[plan.mountainId] ?? undefined}
+                    onEdit={openEdit}
+                    onDelete={removePlan}
+                    />
+                ))}
+                </div>
+            ) : (
+                <p className="empty-note">
+                過去の予定はありません。
+                </p>
+            )}
             </section>
           </>
         )}

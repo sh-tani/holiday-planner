@@ -5,7 +5,7 @@ import { AuthProvider } from "@/lib/AuthContext"
 import Header from "@/components/Header"
 
 export const metadata: Metadata = {
-  title: "休日プランナー | 天気と予定で休日をもっと楽しむ",
+  title: "山旅プランナー | 天気と予定で休日をもっと楽しむ",
   description:
     "天気と予定をまとめて管理して、最高の休日プランを見つけるプロトタイプ。",
   generator: "v0.app",

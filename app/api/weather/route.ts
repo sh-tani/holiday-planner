@@ -61,7 +61,8 @@ export async function GET(request: Request) {
       `https://api.open-meteo.com/v1/forecast` +
       `?latitude=${encodeURIComponent(latitude)}` +
       `&longitude=${encodeURIComponent(longitude)}` +
-      `&daily=weather_code,precipitation_probability_max,wind_speed_10m_max` +
+      `&daily=weather_code,precipitation_probability_max,wind_speed_10m_mean` +
+      `&wind_speed_unit=ms` +
       `&timezone=Asia%2FTokyo` +
       `&start_date=${encodeURIComponent(date)}` +
       `&end_date=${encodeURIComponent(date)}`
@@ -91,7 +92,7 @@ export async function GET(request: Request) {
     const rain =
       data.daily?.precipitation_probability_max?.[0] ?? null
     const wind =
-      data.daily?.wind_speed_10m_max?.[0] ?? null
+      data.daily?.wind_speed_10m_mean?.[0] ?? null
 
     return NextResponse.json({
       date,

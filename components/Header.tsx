@@ -19,13 +19,13 @@ export default function Header() {
         <a
           className="brand"
           href="/"
-          aria-label="休日プランナー ホーム"
+          aria-label="山旅プランナー ホーム"
         >
           <span className="brand-mark">
             <Compass size={20} />
           </span>
 
-          <span>休日プランナー</span>
+          <span>山旅プランナー</span>
         </a>
       </header>
     )
@@ -36,13 +36,13 @@ export default function Header() {
       <a
         className="brand"
         href="/"
-        aria-label="休日プランナー ホーム"
+        aria-label="山旅プランナー ホーム"
       >
         <span className="brand-mark">
           <Compass size={20} />
         </span>
 
-        <span>休日プランナー</span>
+        <span>山旅プランナー</span>
       </a>
 
       {user ? (

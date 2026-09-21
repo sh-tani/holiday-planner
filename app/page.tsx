@@ -1,7 +1,6 @@
 'use client'
 
 import { FormEvent, useEffect, useMemo, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import {
   getPlans,
   createPlan,
@@ -34,14 +33,18 @@ import type { Mountain } from '@/lib/mountains/api'
 import Rating from '@/components/planner/Rating'
 import EmptyState from '@/components/planner/EmptyState'
 import PlanFormModal from '@/components/planner/PlanFormModal'
+import { useAuth } from '@/lib/AuthContext'
 
 export default function Page() {
+  const {user, profile, loading: authLoading} = useAuth()
   const [plans, setPlans] = useState<Plan[]>([])
-  const [userName, setUserName] = useState('')
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
 
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isAlternativesOpen, setIsAlternativesOpen] = useState(false)
+
+  const [alternativeDate, setAlternativeDate] = useState('')
+  const [alternativeResults, setAlternativeResults] = useState<Plan[]>([])
+  const [isAlternativeLoading, setIsAlternativeLoading] = useState(false)
 
   const [editingId, setEditingId] = useState<string | null>(null)
 
@@ -64,8 +67,18 @@ export default function Page() {
 
   // APIから予定を取得
   useEffect(() => {
-    checkAuth()
-  }, [])
+    if (authLoading) {
+      return
+    }
+
+    if (user) {
+      fetchPlans(true)
+    } else {
+      fetchPlans(false)
+      setAlternativeResults([])
+      setIsAlternativesOpen(false)
+    }
+  }, [user, authLoading])
 
   useEffect(() => {
     const mountainIdFromUrl =
@@ -144,30 +157,6 @@ export default function Page() {
     return () => clearTimeout(timer)
   }, [mountainName, mountainId])
 
-  async function checkAuth() {
-    try {
-      const supabase = createClient()
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      
-      if (user) {
-        setIsLoggedIn(true)
-        await fetchPlans(true)
-        await fetchUserName()
-      } else {
-        setIsLoggedIn(false)
-        await fetchPlans(false)
-      }
-    } catch (error) {
-      console.error('認証チェックに失敗しました:', error)
-      
-      // セッションがない場合はゲストとして扱う
-      setIsLoggedIn(false)
-      await fetchPlans(false)
-    }
-  }
-
   async function fetchPlans(loggedIn: boolean) {
     setLoading(true)
 
@@ -189,64 +178,6 @@ export default function Page() {
     } finally {
       setLoading(false)
     }
-  }
-
-  async function fetchUserName() {
-    try {
-      const supabase = createClient()
-
-      console.log('① fetchUserName開始')
-      
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser()
-      
-      console.log('② user:', user)
-      console.log('③ userError:', userError)
-
-      if (userError) {
-        throw userError
-      }
-      
-      if (!user) {
-        console.log('④ ログインユーザーが取得できませんでした')
-        return
-      }
-      
-      const { data: profile, error: profileError } =
-        await supabase
-        .from('profiles')
-        .select('name')
-        .eq('id', user.id)
-        .single()
-
-        console.log('⑤ profile:', profile)
-        console.log('⑥ profileError:', profileError)
-
-      if (profileError) {
-        throw profileError
-      }
-      
-      setUserName(profile?.name ?? '')
-      console.log('⑦ userName:', profile?.name)
-    } catch (error) {
-      console.error(
-        'ユーザー情報の取得に失敗しました:',
-        error
-      )
-    }
-  }
-
-  async function handleLogout() {
-    const supabase = createClient()
-    const { error } = await supabase.auth.signOut()
-
-    if (error) {
-      console.error('ログアウトに失敗しました:', error)
-      return
-    }
-    window.location.href = '/auth/login'
   }
 
   /**
@@ -402,16 +333,16 @@ export default function Page() {
         await updatePlan(
           editingId,
           planData,
-          isLoggedIn
+          !!user
         )
       } else {
         await createPlan(
           planData,
-          isLoggedIn
+          !!user
         )
       }
 
-      await fetchPlans(isLoggedIn)
+      await fetchPlans(!!user)
 
       setIsFormOpen(false)
       resetForm()
@@ -437,9 +368,9 @@ export default function Page() {
 
     if (!confirmed) return
     try {
-      await deletePlan(id, isLoggedIn)
+      await deletePlan(id, !!user)
 
-      await fetchPlans(isLoggedIn)
+      await fetchPlans(!!user)
     } catch (error) {
       console.error('予定の削除に失敗しました:', error)
       alert('予定の削除に失敗しました。')
@@ -487,16 +418,169 @@ export default function Page() {
   }, [plans])
 
   /**
-   * おすすめ度順に並び替え
+   * 代替プラン検索の日付候補
+   * 明日〜7日後
    */
-  const sortedAlternatives = useMemo(
-    () =>
-      [...plans].sort(
-        (a, b) =>
-          getRating(b).score - getRating(a).score
-      ),
-    [plans]
-  )
+  const alternativeDateOptions = useMemo(() => {
+    const today = new Date()
+    const dates: string[] = []
+
+    const toDateString = (date: Date) => {
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+
+      return `${year}-${month}-${day}`
+    }
+
+    for (let i = 1; i <= 7; i++) {
+      const date = new Date(today)
+      date.setDate(date.getDate() + i)
+      dates.push(toDateString(date))
+    }
+
+    return dates
+  }, [])
+
+  /**
+   * 予定一覧に登録されている山を重複なしで取得
+   */
+  const alternativeMountains = useMemo(() => {
+    const mountainIds = new Set<string>()
+
+    return plans
+      .map((plan) => {
+        if (mountainIds.has(plan.mountainId)) {
+          return null
+        }
+
+        const mountain = mountainsById[plan.mountainId]
+
+        if (!mountain) {
+          return null
+        }
+
+        mountainIds.add(plan.mountainId)
+        return mountain
+      })
+      .filter((mountain): mountain is Mountain => mountain !== null)
+  }, [plans, mountainsById])
+
+  /**
+   * 代替検索の初期日付を決定
+   */
+  const getDefaultAlternativeDate = () => {
+    const options = alternativeDateOptions
+
+    if (options.length === 0) {
+      return ''
+    }
+
+    const nearestPlanDate = fixedPlans[0]?.date
+
+    if (
+      nearestPlanDate &&
+      options.includes(nearestPlanDate)
+    ) {
+      return nearestPlanDate
+    }
+
+    return options[0]
+  }
+
+  /**
+   * 指定日の天気から代替候補を検索
+   */
+  async function searchAlternativePlans(targetDate: string) {
+    if (!targetDate || alternativeMountains.length === 0) {
+      setAlternativeResults([])
+      return
+    }
+
+    setIsAlternativeLoading(true)
+
+    try {
+      const results = await Promise.all(
+        alternativeMountains.map(async (mountain) => {
+          try {
+            const response = await fetch(
+              `/api/weather?latitude=${encodeURIComponent(
+                mountain.latitude
+              )}&longitude=${encodeURIComponent(
+                mountain.longitude
+              )}&date=${encodeURIComponent(targetDate)}`
+            )
+
+            if (!response.ok) {
+              return null
+            }
+
+            const weatherData = await response.json()
+
+            const temporaryPlan = {
+              id: '',
+              title: mountain.name,
+              mountainId: mountain.id,
+              date: targetDate,
+              weather: weatherData.weather ?? '不明',
+              weatherCode:
+                weatherData.weatherCode ?? null,
+              rain: weatherData.rain ?? 0,
+              wind: weatherData.wind ?? 0,
+              fixed: true,
+            } as Plan
+
+            const rating = getRating(temporaryPlan)
+
+            if (rating.label !== 'おすすめ') {
+              return null
+            }
+
+            return temporaryPlan
+          } catch (error) {
+            console.error(
+              `${mountain.name}の天気取得に失敗しました:`,
+              error
+            )
+            return null
+          }
+        })
+      )
+
+      setAlternativeResults(
+        results.filter(
+          (plan): plan is Plan => plan !== null
+        )
+      )
+    } finally {
+      setIsAlternativeLoading(false)
+    }
+  }
+
+  /**
+   * 代替プラン検索モーダルを開く
+   */
+  function openAlternatives() {
+    const defaultDate = getDefaultAlternativeDate()
+
+    setAlternativeDate(defaultDate)
+    setIsAlternativesOpen(true)
+  }
+
+  /**
+   * モーダル内の日付変更時に再検索
+   */
+  useEffect(() => {
+    if (!isAlternativesOpen || !alternativeDate) {
+      return
+    }
+
+    searchAlternativePlans(alternativeDate)
+  }, [
+    isAlternativesOpen,
+    alternativeDate,
+    alternativeMountains,
+  ])
 
   return (
     <main className="planner-shell">
@@ -562,7 +646,7 @@ export default function Page() {
               <CalendarDays size={18} />
               予定一覧
             </button>
-            
+
             <button
               className="secondary-button"
               type="button"
@@ -623,20 +707,18 @@ export default function Page() {
             </p>
 
             <h2>
-              天気が良い日に変更する？
+              天気が良い山に変更する？
             </h2>
 
             <p>
-              登録した予定から、天気の良い日を探してみましょう。
+              登録した予定から、天気の良い山を探してみましょう。
             </p>
           </div>
 
           <button
             className="secondary-button"
             type="button"
-            onClick={() =>
-              setIsAlternativesOpen(true)
-            }
+            onClick={openAlternatives}
           >
             代替プランを検索
             <ChevronRight size={17} />
@@ -710,47 +792,75 @@ export default function Page() {
             </p>
 
             <h2 id="alternatives-title">
-              おすすめの予定
+              天気の良い山を探す
             </h2>
 
             <p className="modal-intro">
-              登録済みの予定をおすすめ度順に表示しています。
+              登録済みの山から、選択した日の天気が「おすすめ」の山を表示します。
             </p>
 
+            <div className="alternative-date-selector">
+              <label htmlFor="alternative-date">
+                予定日
+              </label>
+
+              <select
+                id="alternative-date"
+                value={alternativeDate}
+                onChange={(event) =>
+                  setAlternativeDate(event.target.value)
+                }
+              >
+                {alternativeDateOptions.map(
+                  (dateOption) => (
+                    <option
+                      key={dateOption}
+                      value={dateOption}
+                    >
+                      {formatDateWithWeekday(dateOption)}
+                    </option>
+                  )
+                )}
+              </select>
+            </div>
+
             <div className="suggestion-list">
-              {sortedAlternatives.map((plan) => {
-                const mountain = mountainsById[plan.mountainId]
-
-                return (
-                  <div
-                    className="suggestion-row"
-                    key={plan.id}
-                  >
-                    <div>
-                      <strong>
-                        {plan.title}
-                      </strong>
-
-                      <span>
-                        {mountain
-                          ? `${mountain.name}（${mountain.area}）`
-                          : '山情報不明'}
-
-                        {plan.date &&
-                          ` ・ ${plan.date}`}
-                      </span>
-                    </div>
-
-                    <Rating
-                      rating={getRating(plan)}
-                    />
-                  </div>
-                )
-              })}
-
-              {sortedAlternatives.length === 0 && (
+              {isAlternativeLoading ? (
                 <p className="empty-note">
-                  代替候補になる予定がありません。
+                  天気予報を確認しています…
+                </p>
+              ) : alternativeResults.length > 0 ? (
+                alternativeResults.map((plan) => {
+                  const mountain =
+                    mountainsById[plan.mountainId]
+
+                  return (
+                    <div
+                      className="suggestion-row"
+                      key={plan.mountainId}
+                    >
+                      <div>
+                        <strong>
+                          {mountain?.name ??
+                            '山情報不明'}
+                        </strong>
+
+                        <span>
+                          {mountain
+                            ? `${mountain.name}（${mountain.area}）`
+                            : '山情報不明'}
+                        </span>
+                      </div>
+
+                      <Rating
+                        rating={getRating(plan)}
+                      />
+                    </div>
+                  )
+                })
+              ) : (
+                <p className="empty-note">
+                  この日の「おすすめ」の山はありません。
                 </p>
               )}
             </div>
