@@ -2,6 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react"
 import dynamic from "next/dynamic"
+import {
+  getMountainLists,
+  type MountainList,
+} from "@/lib/mountains/api"
 
 const MountainMap = dynamic(
   () => import("@/components/mountains/MountainMap"),
@@ -27,11 +31,24 @@ export default function MountainsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [appliedQuery, setAppliedQuery] = useState("")
   const [selectedPrefecture, setSelectedPrefecture] = useState("")
+  const [mountainLists, setMountainLists] = useState<MountainList[]>([])
+  const [selectedList, setSelectedList] = useState("")
 
   useEffect(() => {
     async function loadMountains() {
       try {
-        const response = await fetch("/api/mountains")
+        setLoading(true)
+        setError(null)
+
+        const params = new URLSearchParams()
+
+        if (selectedList) {
+          params.set("list", selectedList)
+        }
+
+        const response = await fetch(
+          `/api/mountains/map?${params.toString()}`
+        )
 
         if (!response.ok) {
           throw new Error("山マスタの取得に失敗しました")
@@ -51,11 +68,74 @@ export default function MountainsPage() {
     }
 
     loadMountains()
+  }, [selectedList])
+
+  useEffect(() => {
+    async function loadMountainLists() {
+      try {
+        const lists = await getMountainLists()
+        setMountainLists(lists)
+      } catch (err) {
+        console.error("山リストの取得に失敗しました:", err)
+      }
+    }
+
+    loadMountainLists()
   }, [])
 
   function handleSearch() {
     setAppliedQuery(searchQuery)
   }
+
+  const PREFECTURE_ORDER = [
+    "北海道",
+    "青森県",
+    "岩手県",
+    "宮城県",
+    "秋田県",
+    "山形県",
+    "福島県",
+    "茨城県",
+    "栃木県",
+    "群馬県",
+    "埼玉県",
+    "千葉県",
+    "東京都",
+    "神奈川県",
+    "新潟県",
+    "富山県",
+    "石川県",
+    "福井県",
+    "山梨県",
+    "長野県",
+    "岐阜県",
+    "静岡県",
+    "愛知県",
+    "三重県",
+    "滋賀県",
+    "京都府",
+    "大阪府",
+    "兵庫県",
+    "奈良県",
+    "和歌山県",
+    "鳥取県",
+    "島根県",
+    "岡山県",
+    "広島県",
+    "山口県",
+    "徳島県",
+    "香川県",
+    "愛媛県",
+    "高知県",
+    "福岡県",
+    "佐賀県",
+    "長崎県",
+    "熊本県",
+    "大分県",
+    "宮崎県",
+    "鹿児島県",
+    "沖縄県",
+  ]
 
   const prefectures = useMemo(() => {
     const prefectureList = mountains.flatMap((mountain) => {
@@ -68,8 +148,10 @@ export default function MountainsPage() {
         .map((prefecture) => prefecture.trim())
         .filter(Boolean)
     })
-
-    return Array.from(new Set(prefectureList)).sort()
+    const uniquePrefectures = Array.from(new Set(prefectureList))
+    return PREFECTURE_ORDER.filter((prefecture) =>
+      uniquePrefectures.includes(prefecture)
+    )
   }, [mountains])
 
   const filteredMountains = useMemo(() => {
@@ -131,6 +213,23 @@ export default function MountainsPage() {
           className="mountain-search-form w-full"
         >
           <select
+            value={selectedList}
+            onChange={(event) => {
+              setSelectedList(event.target.value)
+              setSelectedPrefecture("")
+            }}
+            className="!w-auto shrink-0 rounded-lg border px-4 py-2.5 text-sm"
+          >
+            <option value="">リストすべて</option>
+
+            {mountainLists.map((list) => (
+              <option key={list.id} value={list.name}>
+                {list.name}
+              </option>
+            ))}
+          </select>
+
+          <select
             value={selectedPrefecture}
             onChange={(event) => setSelectedPrefecture(event.target.value)}
             className="!w-auto shrink-0 rounded-lg border px-4 py-2.5 text-sm"
@@ -167,15 +266,15 @@ export default function MountainsPage() {
       </div>
 
       {/* 検索結果 */}
-      {filteredMountains.length === 0 ? (
-        <div className="mb-4 rounded-lg border bg-gray-50 px-4 py-8 text-center">
+      <div className="overflow-hidden rounded-xl border">
+        <MountainMap mountains={filteredMountains} />
+      </div>
+
+      {filteredMountains.length === 0 && (
+        <div className="mt-4 rounded-lg border bg-gray-50 px-4 py-8 text-center">
           <p className="text-sm text-gray-600">
             「{searchQuery}」に該当する山がありません。
           </p>
-        </div>
-      ) : (
-        <div className="overflow-hidden rounded-xl border">
-          <MountainMap mountains={filteredMountains} />
         </div>
       )}
     </main>

@@ -27,7 +27,76 @@ button { cursor: pointer; }
 .eyebrow, .section-kicker { display: flex; align-items: center; gap: 7px; margin: 0 0 12px; color: #6fa36f; font-size: 11px; font-weight: 800; letter-spacing: .14em; }
 h1, h2, h3, p { margin-top: 0; } h1 { margin-bottom: 16px; font-size: clamp(38px, 5vw, 58px); line-height: 1.08; letter-spacing: -.06em; } h1 em { color: var(--primary); font-style: normal; } .hero-copy { margin: 0; color: #657564; line-height: 1.8; font-size: 15px; }
 .hero-illustration { width: 230px; height: 170px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #8fbc8f; transform: rotate(5deg); } .hero-illustration span { color: #638f63; text-align: center; font-size: 12px; line-height: 1.5; }
-.section-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin: 58px 0 20px; } .section-heading.compact { margin-top: 60px; } h2 { margin-bottom: 0; font-size: 26px; letter-spacing: -.04em; } .section-kicker { margin-bottom: 7px; font-size: 10px; }
+.section-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 58px 0 20px; 
+}
+.section-heading.compact {
+  margin-top: 60px;
+}
+h2 {
+  margin-bottom: 0;
+  font-size: 26px;
+  letter-spacing: -.04em;
+}
+.section-kicker {
+  margin-bottom: 7px;
+  font-size: 10px;
+}
+/* タブ直下の見出しだけ余白を調整 */
+.plan-tabs + .section-heading {
+  margin-top: 28px;
+}
+/* 予定タブ */
+.plan-tabs {
+  display: flex;
+  gap: 0;
+  margin: 20px 0 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.plan-tab {
+  position: relative;
+  padding: 10px 20px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.plan-tab:hover {
+  color: var(--foreground);
+}
+
+.plan-tab.active {
+  color: var(--foreground);
+}
+
+.plan-tab.active::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: -1px;
+  height: 2px;
+  background: var(--primary);
+  border-radius: 2px 2px 0 0;
+}
+
+@media (max-width: 640px) {
+  .plan-tab {
+    padding: 9px 16px;
+    font-size: 13px;
+  }
+}
+.first-plan-section .section-heading {
+  margin-top: 28px;
+}
 .primary-button, .secondary-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 12px; padding: 12px 17px; border: 1px solid var(--primary); font-weight: 700; font-size: 13px; transition: transform .2s, box-shadow .2s; } .primary-button { background: var(--primary); color: white; box-shadow: 0 8px 18px #8fbc8f2e; } .secondary-button { background: white; color: var(--primary); } .primary-button:hover, .secondary-button:hover { transform: translateY(-2px); box-shadow: 0 8px 22px #6fa36f30; }
 .plan-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; } 
 .plan-card {

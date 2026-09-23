@@ -1,6 +1,13 @@
 "use client"
 
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet"
+import { useEffect } from "react"
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup,
+  useMap,
+} from "react-leaflet"
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
 
@@ -8,6 +15,7 @@ type Mountain = {
   id: string
   name: string
   area: string
+  prefecture: string | null
   latitude: number
   longitude: number
   elevation: number | null
@@ -25,6 +33,52 @@ const mountainIcon = L.divIcon({
   popupAnchor: [0, -10],
 })
 
+  function MapBoundsController({
+    mountains,
+  }: {
+    mountains: Mountain[]
+  }) {
+    const map = useMap()
+
+    useEffect(() => {
+      if (mountains.length === 0) return
+
+      const timer = window.setTimeout(() => {
+        if (!map.getContainer()) return
+
+        if (mountains.length === 1) {
+          map.setView(
+            [mountains[0].latitude, mountains[0].longitude],
+            12,
+            {
+              animate: false,
+            }
+          )
+          return
+        }
+
+        const bounds = L.latLngBounds(
+          mountains.map((mountain) => [
+            mountain.latitude,
+            mountain.longitude,
+          ])
+        )
+
+        map.fitBounds(bounds, {
+          padding: [40, 40],
+          maxZoom: 12,
+          animate: false,
+        })
+      }, 100)
+
+      return () => {
+        window.clearTimeout(timer)
+      }
+    }, [map, mountains])
+
+    return null
+  }
+
 export default function MountainMap({ mountains }: Props) {
   return (
     <MapContainer
@@ -37,6 +91,8 @@ export default function MountainMap({ mountains }: Props) {
         attribution='&copy; OpenStreetMap contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
+
+      <MapBoundsController mountains={mountains} />
 
       {mountains.map((mountain) => (
         <Marker

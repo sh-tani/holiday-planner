@@ -4,14 +4,7 @@ import {
   X,
 } from 'lucide-react'
 
-type Mountain = {
-  id: string
-  name: string
-  area: string
-  latitude: number
-  longitude: number
-  elevation: number | null
-}
+import type { Mountain } from '@/lib/mountains/api'
 
 type PlanFormModalProps = {
   isOpen: boolean
@@ -22,6 +15,7 @@ type PlanFormModalProps = {
   title: string
   mountainId: string
   mountainName: string
+  mountainList: string
   mountainCandidates: Mountain[]
   isMountainSearching: boolean
   selectedMountain: Mountain | null
@@ -34,10 +28,15 @@ type PlanFormModalProps = {
 
   onTitleChange: (value: string) => void
   onMountainNameChange: (value: string) => void
+  onMountainListChange: (value: string) => void
   onSelectMountain: (mountain: Mountain) => void
   onClearMountain: () => void
   onDateChange: (value: string) => void
   onUndecidedChange: (checked: boolean) => void
+  mountainLists: {
+    id: string
+    name: string
+  }[]
 }
 
 export default function PlanFormModal({
@@ -49,6 +48,7 @@ export default function PlanFormModal({
   title,
   mountainId,
   mountainName,
+  mountainList,
   mountainCandidates,
   isMountainSearching,
   selectedMountain,
@@ -58,9 +58,10 @@ export default function PlanFormModal({
 
   onClose,
   onSubmit,
-
   onTitleChange,
   onMountainNameChange,
+  onMountainListChange,
+  mountainLists,
   onSelectMountain,
   onClearMountain,
   onDateChange,
@@ -111,6 +112,25 @@ export default function PlanFormModal({
               }
               placeholder="例：秋の高尾山ハイキング"
             />
+          </label>
+
+          {/* リストで絞り込み */}
+          <label>
+            リストで絞り込み
+            <select
+              value={mountainList}
+              onChange={(event) =>
+                onMountainListChange(event.target.value)
+              }
+            >
+              <option value="">すべての山</option>
+
+              {mountainLists.map((list) => (
+                <option key={list.id} value={list.name}>
+                  {list.name}
+                </option>
+              ))}
+            </select>
           </label>
 
           {/* 山名 */}

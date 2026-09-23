@@ -2,67 +2,80 @@ export type Mountain = {
   id: string
   name: string
   area: string
+  prefecture: string | null
+  municipality: string | null
   latitude: number
   longitude: number
   elevation: number | null
 }
 
 export async function searchMountains(
-  query: string
+  query: string,
+  list?: string
 ): Promise<Mountain[]> {
-  const trimmedQuery = query.trim()
+  const params = new URLSearchParams()
 
-  if (!trimmedQuery) {
-    return []
+  if (query.trim()) {
+    params.set('query', query.trim())
+  }
+
+  if (list?.trim()) {
+    params.set('list', list.trim())
   }
 
   const response = await fetch(
-    `/api/mountains?query=${encodeURIComponent(trimmedQuery)}`
+    `/api/mountains?${params.toString()}`
   )
 
   if (!response.ok) {
-    throw new Error('山情報の取得に失敗しました')
+    throw new Error('山の検索に失敗しました')
   }
 
-  const data = await response.json()
-
-  return data ?? []
+  return response.json()
 }
 
-export async function getMountain(
+export type MountainList = {
   id: string
-): Promise<Mountain | null> {
-  if (!id) {
-    return null
-  }
+  name: string
+}
 
-  const response = await fetch(
-    `/api/mountains?id=${encodeURIComponent(id)}`
-  )
+export async function getMountainLists(): Promise<MountainList[]> {
+  const response = await fetch('/api/mountain-lists')
 
   if (!response.ok) {
-    return null
+    throw new Error('山リストの取得に失敗しました')
   }
 
-  return (await response.json()) as Mountain
+  return response.json()
 }
 
 export async function getMountainsByIds(
   ids: string[]
 ): Promise<Record<string, Mountain>> {
-  const uniqueIds = [...new Set(ids.filter(Boolean))]
+  if (ids.length === 0) {
+    return {}
+  }
 
   const results = await Promise.all(
-    uniqueIds.map((id) => getMountain(id))
+    ids.map(async (id) => {
+      const response = await fetch(
+        `/api/mountains?id=${encodeURIComponent(id)}`
+      )
+
+      if (!response.ok) {
+        return null
+      }
+
+      const mountain = await response.json()
+
+      return [id, mountain] as const
+    })
   )
 
-  const mountainMap: Record<string, Mountain> = {}
-
-  results.forEach((mountain) => {
-    if (mountain) {
-      mountainMap[mountain.id] = mountain
-    }
-  })
-
-  return mountainMap
+  return Object.fromEntries(
+    results.filter(
+      (result): result is readonly [string, Mountain] =>
+        result !== null
+    )
+  )
 }

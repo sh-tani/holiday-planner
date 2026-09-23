@@ -8,7 +8,6 @@ import {
   deletePlan,
 } from '@/lib/plans/api'
 import {
-  CalendarDays,
   Check,
   ChevronRight,
   CloudSun,
@@ -27,6 +26,7 @@ import { formatDateWithWeekday } from '@/lib/planner/date'
 import PlanCard from '@/components/planner/PlanCard'
 import {
   searchMountains,
+  getMountainLists,
   getMountainsByIds,
 } from '@/lib/mountains/api'
 import type { Mountain } from '@/lib/mountains/api'
@@ -34,10 +34,12 @@ import Rating from '@/components/planner/Rating'
 import EmptyState from '@/components/planner/EmptyState'
 import PlanFormModal from '@/components/planner/PlanFormModal'
 import { useAuth } from '@/lib/AuthContext'
+import PlanList from '@/components/planner/PlanList'
 
 export default function Page() {
   const {user, profile, loading: authLoading} = useAuth()
   const [plans, setPlans] = useState<Plan[]>([])
+  const [activeTab, setActiveTab] = useState<'weekly' | 'all'>('weekly')
 
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isAlternativesOpen, setIsAlternativesOpen] = useState(false)
@@ -56,6 +58,10 @@ export default function Page() {
   const [mountainId, setMountainId] = useState('')
   const [mountainName, setMountainName] = useState('')
   const [mountainCandidates, setMountainCandidates] = useState<Mountain[]>([])
+  const [mountainList, setMountainList] = useState('')
+  const [mountainLists, setMountainLists] = useState<
+    { id: string; name: string }[]
+  >([])
   const [isMountainSearching, setIsMountainSearching] = useState(false)
   const [selectedMountain, setSelectedMountain] = useState<Mountain | null>(null)
   const [mountainsById, setMountainsById] = useState<Record<string, Mountain>>({})
@@ -144,7 +150,10 @@ export default function Page() {
       try {
         setIsMountainSearching(true)
 
-        const data = await searchMountains(query)
+        const data = await searchMountains(
+          query,
+          mountainList
+        )
         setMountainCandidates(data)
       } catch (error) {
         console.error('山の検索に失敗しました:', error)
@@ -155,7 +164,20 @@ export default function Page() {
     }, 300)
 
     return () => clearTimeout(timer)
-  }, [mountainName, mountainId])
+  }, [mountainName, mountainId, mountainList])
+
+  useEffect(() => {
+    async function loadMountainLists() {
+      try {
+        const lists = await getMountainLists()
+        setMountainLists(lists)
+      } catch (error) {
+        console.error('山リストの取得に失敗しました:', error)
+      }
+    }
+
+    loadMountainLists()
+  }, [])
 
   async function fetchPlans(loggedIn: boolean) {
     setLoading(true)
@@ -180,6 +202,13 @@ export default function Page() {
     }
   }
 
+  function handleMountainListChange(value: string) {
+    setMountainList(value)
+    // リストを変更したら、現在選択している山を解除
+    setMountainId('')
+    setSelectedMountain(null)
+    setMountainCandidates([])
+  }
   /**
    * フォームを初期化
    */
@@ -187,6 +216,7 @@ export default function Page() {
     setTitle('')
     setMountainId('')
     setMountainName('')
+    setMountainList('')
     setDate('')
     setUndecided(false)
     setEditingId(null)
@@ -625,28 +655,8 @@ export default function Page() {
           </div>
         </section>
 
-        {/* 今週の予定 */}
         <section className="section-heading">
-          <div>
-            <p className="section-kicker">
-              YOUR PLANS
-            </p>
-
-            <h2>今週の予定</h2>
-          </div>
-
           <div className="section-actions">
-            <button
-              className="secondary-button"
-              type="button"
-              onClick={() => {
-                window.location.href = '/plans'
-              }}
-            >
-              <CalendarDays size={18} />
-              予定一覧
-            </button>
-
             <button
               className="secondary-button"
               type="button"
@@ -669,12 +679,49 @@ export default function Page() {
           </div>
         </section>
 
+        <div className="plan-tabs" role="tablist" aria-label="予定表示">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'weekly'}
+            className={`plan-tab ${
+              activeTab === 'weekly' ? 'active' : ''
+            }`}
+            onClick={() => setActiveTab('weekly')}
+          >
+            今週の予定
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'all'}
+            className={`plan-tab ${
+              activeTab === 'all' ? 'active' : ''
+            }`}
+            onClick={() => setActiveTab('all')}
+          >
+            予定一覧
+          </button>
+        </div>
+        {activeTab === 'weekly' && (
+          <section className="section-heading">
+            <div>
+              <p className="section-kicker">
+                YOUR PLANS
+              </p>
+
+              <h2>今週の予定</h2>
+            </div>
+          </section>
+        )}
+
         {/* 読み込み中 */}
         {loading ? (
           <div className="empty-state">
             <p>予定を読み込んでいます...</p>
           </div>
-        ) : (
+        ) : activeTab === 'weekly' ? (
           <section
             className="plan-grid"
             aria-label="今週の予定"
@@ -693,37 +740,46 @@ export default function Page() {
               <EmptyState onClick={openCreate} />
             )}
           </section>
+        ) : (
+          <PlanList
+            plans={plans}
+            mountainsById={mountainsById}
+            onEdit={openEdit}
+            onDelete={removePlan}
+          />
         )}
 
         {/* 代替プラン */}
-        <section className="alternative-cta">
-          <div className="cta-icon">
-            <Sparkles size={22} />
-          </div>
+        {activeTab === 'weekly' && (
+          <section className="alternative-cta">
+            <div className="cta-icon">
+              <Sparkles size={22} />
+            </div>
 
-          <div>
-            <p className="section-kicker">
-              FIND YOUR BEST DAY
-            </p>
+            <div>
+              <p className="section-kicker">
+                FIND YOUR BEST DAY
+              </p>
 
-            <h2>
-              天気が良い山に変更する？
-            </h2>
+              <h2>
+                天気が良い山に変更する？
+              </h2>
 
-            <p>
-              登録した予定から、天気の良い山を探してみましょう。
-            </p>
-          </div>
+              <p>
+                登録した予定から、天気の良い山を探してみましょう。
+              </p>
+            </div>
 
-          <button
-            className="secondary-button"
-            type="button"
-            onClick={openAlternatives}
-          >
-            代替プランを検索
-            <ChevronRight size={17} />
-          </button>
-        </section>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={openAlternatives}
+            >
+              代替プランを検索
+              <ChevronRight size={17} />
+            </button>
+          </section>
+        )}
       </div>
 
       {/* 予定登録・編集モーダル */}
@@ -736,6 +792,7 @@ export default function Page() {
         title={title}
         mountainId={mountainId}
         mountainName={mountainName}
+        mountainList={mountainList}
         mountainCandidates={mountainCandidates}
         isMountainSearching={isMountainSearching}
         selectedMountain={selectedMountain}
@@ -752,6 +809,8 @@ export default function Page() {
 
         onTitleChange={setTitle}
         onMountainNameChange={handleMountainNameChange}
+        onMountainListChange={handleMountainListChange}
+        mountainLists={mountainLists}
         onSelectMountain={selectMountain}
         onClearMountain={clearMountain}
         onDateChange={setDate}

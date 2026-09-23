@@ -1,6 +1,6 @@
 "use client"
 
-import { FormEvent, useEffect, useMemo, useState } from "react"
+import { FormEvent, useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import {
   getPlans,
@@ -14,7 +14,7 @@ import {
   searchMountains,
 } from "@/lib/mountains/api"
 import type { Mountain } from "@/lib/mountains/api"
-import PlanListItem from "@/components/planner/PlanListItem"
+import PlanList from "@/components/planner/PlanList"
 import PlanFormModal from "@/components/planner/PlanFormModal"
 
 export default function PlansPage() {
@@ -374,45 +374,6 @@ export default function PlansPage() {
     }
   }
 
-  /**
-   * 予定を日付順に並べる
-   * 日程未定は最後
-   */
-    const todayString = (() => {
-        const today = new Date()
-        const year = today.getFullYear()
-        const month = String(today.getMonth() + 1).padStart(2, "0")
-        const day = String(today.getDate()).padStart(2, "0")
-
-        return `${year}-${month}-${day}`
-    })()
-
-    const upcomingPlans = useMemo(() => {
-    return [...plans]
-        .filter(
-        (plan) =>
-            plan.fixed &&
-            plan.date &&
-            plan.date >= todayString
-      )
-        .sort((a, b) => a.date!.localeCompare(b.date!))
-    }, [plans, todayString])
-
-    const undecidedPlans = useMemo(() => {
-      return [...plans].filter((plan) => !plan.fixed)
-    }, [plans])
-
-    const pastPlans = useMemo(() => {
-     return [...plans]
-        .filter(
-       (plan) =>
-            plan.fixed &&
-            plan.date &&
-           plan.date < todayString
-       )
-        .sort((a, b) => b.date!.localeCompare(a.date!))
-    }, [plans, todayString])
-
   return (
     <main className="planner-shell">
       <div className="page-content">
@@ -435,101 +396,12 @@ export default function PlansPage() {
           </div>
         ) : (
           <>
-            {/* 今後の予定 */}
-            <section>
-              <div className="section-heading compact">
-                <div>
-                  <p className="section-kicker">UPCOMING</p>
-                  <h2>今後の予定</h2>
-                </div>
-                <span className="count-badge">{upcomingPlans.length}件</span>
-              </div>
-
-              {upcomingPlans.length > 0 ? (
-                <div className="plan-list">
-                  {upcomingPlans.map((plan) => (
-                    <PlanListItem
-                        key={plan.id}
-                        plan={plan}
-                        mountain={mountainsById[plan.mountainId] ?? undefined}
-                        onEdit={openEdit}
-                        onDelete={removePlan}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <p className="empty-note">
-                  日程確定済みの予定はありません。
-                </p>
-              )}
-            </section>
-
-            {/* 日程未定 */}
-            <section className="undecided-section">
-              <div className="section-heading compact">
-                <div>
-                  <p className="section-kicker">
-                    FLEXIBLE IDEAS
-                  </p>
-
-                  <h2>
-                    日程未定
-                  </h2>
-                </div>
-
-                <span className="count-badge">
-                  {undecidedPlans.length}件
-                </span>
-              </div>
-
-              {undecidedPlans.length > 0 ? (
-                <div className="plan-list">
-                  {undecidedPlans.map((plan) => (
-                      <PlanListItem
-                        key={plan.id}
-                        plan={plan}
-                        mountain={mountainsById[plan.mountainId] ?? undefined}
-                        onEdit={openEdit}
-                        onDelete={removePlan}
-                      />
-                    )
-                  )}
-                </div>
-              ) : (
-                <p className="empty-note">
-                  日程未定の予定はありません。
-                </p>
-              )}
-            </section>
-
-            {/* 過去の予定 */}
-            <section className="past-section">
-            <div className="section-heading compact">
-                <div>
-                <p className="section-kicker">PAST PLANS</p>
-                <h2>過去の予定</h2>
-                </div>
-                <span className="count-badge">{pastPlans.length}件</span>
-            </div>
-
-            {pastPlans.length > 0 ? (
-                <div className="plan-list">
-                {pastPlans.map((plan) => (
-                    <PlanListItem
-                    key={plan.id}
-                    plan={plan}
-                    mountain={mountainsById[plan.mountainId] ?? undefined}
-                    onEdit={openEdit}
-                    onDelete={removePlan}
-                    />
-                ))}
-                </div>
-            ) : (
-                <p className="empty-note">
-                過去の予定はありません。
-                </p>
-            )}
-            </section>
+            <PlanList
+              plans={plans}
+              mountainsById={mountainsById}
+              onEdit={openEdit}
+              onDelete={removePlan}
+            />
           </>
         )}
       </div>

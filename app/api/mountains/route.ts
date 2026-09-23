@@ -7,14 +7,19 @@ export async function GET(request: Request) {
 
     const query = searchParams.get('query')?.trim() ?? ''
     const id = searchParams.get('id')?.trim() ?? ''
+    const list = searchParams.get('list')?.trim() ?? ''
 
     const supabase = await createClient()
 
+    // ----------------------------------------
     // ID検索
+    // ----------------------------------------
     if (id) {
       const { data, error } = await supabase
         .from('mountains')
-        .select('id, name, area, prefecture, latitude, longitude, elevation')
+        .select(
+          'id, name, area, prefecture, municipality, latitude, longitude, elevation'
+        )
         .eq('id', id)
         .single()
 
@@ -30,32 +35,75 @@ export async function GET(request: Request) {
       return NextResponse.json(data)
     }
 
-    // キーワード検索
-    if (query) {
-      const { data, error } = await supabase
-        .from('mountains')
-        .select('id, name, area, prefecture, latitude, longitude, elevation')
-        .ilike('name', `%${query}%`)
-        .order('name')
-        .limit(10)
+    // ----------------------------------------
+    // リスト指定がある場合
+    // ----------------------------------------
+    let mountainIds: string[] | null = null
 
-      if (error) {
-        console.error('山情報の取得に失敗しました:', error)
+    if (list) {
+      // リスト名から list_id を取得
+      const { data: listData, error: listError } = await supabase
+        .from('mountain_lists')
+        .select('id')
+        .eq('name', list)
+        .single()
+
+      if (listError) {
+        console.error('山リストの取得に失敗しました:', listError)
 
         return NextResponse.json(
-          { error: '山情報の取得に失敗しました' },
+          { error: '指定された山リストが見つかりません' },
+          { status: 404 }
+        )
+      }
+
+      // リストに所属する mountain_id を取得
+      const { data: memberData, error: memberError } = await supabase
+        .from('mountain_list_members')
+        .select('mountain_id')
+        .eq('list_id', listData.id)
+
+      if (memberError) {
+        console.error('山リストの所属情報取得に失敗しました:', memberError)
+
+        return NextResponse.json(
+          { error: '山リストの取得に失敗しました' },
           { status: 500 }
         )
       }
 
-      return NextResponse.json(data ?? [])
+      mountainIds = (memberData ?? []).map(
+        (member) => member.mountain_id
+      )
+
+      // リストに山がない場合
+      if (mountainIds.length === 0) {
+        return NextResponse.json([])
+      }
     }
 
-    // クエリなし → 全山取得
-    const { data, error } = await supabase
+    // ----------------------------------------
+    // 山マスタ検索
+    // ----------------------------------------
+    let mountainQuery = supabase
       .from('mountains')
-      .select('id, name, area, prefecture, latitude, longitude, elevation')
+      .select(
+        'id, name, area, prefecture, municipality, latitude, longitude, elevation'
+      )
       .order('name')
+
+    // 山名検索
+    if (query) {
+      mountainQuery = mountainQuery.ilike('name', `%${query}%`)
+    }
+
+    // リスト検索
+    if (mountainIds !== null) {
+      mountainQuery = mountainQuery.in('id', mountainIds)
+    }
+
+    // 最大10件
+    const { data, error } = await mountainQuery.limit(10)
 
     if (error) {
       console.error('山情報の取得に失敗しました:', error)
