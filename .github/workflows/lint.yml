@@ -24,5 +24,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Check working directory
+        run: |
+          pwd
+          ls -la
+          cat package.json
+          pnpm run
+
       - name: Run ESLint
         run: pnpm run lint
