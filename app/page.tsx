@@ -1,6 +1,6 @@
 'use client'
 // lintテスト
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import {
   getPlans,
   createPlan,
@@ -35,6 +35,7 @@ import EmptyState from '@/components/planner/EmptyState'
 import PlanFormModal from '@/components/planner/PlanFormModal'
 import { useAuth } from '@/lib/AuthContext'
 import PlanList from '@/components/planner/PlanList'
+import { useRouter } from "next/navigation"
 
 export default function Page() {
   const {user, profile, loading: authLoading} = useAuth()
@@ -68,6 +69,7 @@ export default function Page() {
 
   const [date, setDate] = useState('')
   const [undecided, setUndecided] = useState(false)
+  const router = useRouter()
 
   
 
@@ -81,8 +83,6 @@ export default function Page() {
       fetchPlans(true)
     } else {
       fetchPlans(false)
-      setAlternativeResults([])
-      setIsAlternativesOpen(false)
     }
   }, [user, authLoading])
 
@@ -133,16 +133,8 @@ export default function Page() {
   
   useEffect(() => {
     const query = mountainName.trim()
-    
-    if (!query) {
-      setMountainCandidates([])
-      setIsMountainSearching(false)
-      return
-    }
 
-    // すでに候補から山を選択済みなら検索しない
-    if (mountainId) {
-      setMountainCandidates([])
+    if (!query || mountainId) {
       return
     }
 
@@ -521,71 +513,74 @@ export default function Page() {
   /**
    * 指定日の天気から代替候補を検索
    */
-  async function searchAlternativePlans(targetDate: string) {
-    if (!targetDate || alternativeMountains.length === 0) {
-      setAlternativeResults([])
-      return
-    }
+  const searchAlternativePlans = useCallback(
+    async (targetDate: string) => {
+      if (!targetDate || alternativeMountains.length === 0) {
+        setAlternativeResults([])
+        return
+      }
 
-    setIsAlternativeLoading(true)
+      setIsAlternativeLoading(true)
 
-    try {
-      const results = await Promise.all(
-        alternativeMountains.map(async (mountain) => {
-          try {
-            const response = await fetch(
-              `/api/weather?latitude=${encodeURIComponent(
-                mountain.latitude
-              )}&longitude=${encodeURIComponent(
-                mountain.longitude
-              )}&date=${encodeURIComponent(targetDate)}`
-            )
+      try {
+        const results = await Promise.all(
+         alternativeMountains.map(async (mountain) => {
+            try {
+              const response = await fetch(
+                `/api/weather?latitude=${encodeURIComponent(
+                  mountain.latitude
+               )}&longitude=${encodeURIComponent(
+                  mountain.longitude
+               )}&date=${encodeURIComponent(targetDate)}`
+             )
 
-            if (!response.ok) {
+              if (!response.ok) {
+                return null
+              }
+
+              const weatherData = await response.json()
+
+              const temporaryPlan = {
+                id: '',
+                title: mountain.name,
+                mountainId: mountain.id,
+               date: targetDate,
+                weather: weatherData.weather ?? '不明',
+                weatherCode:
+                  weatherData.weatherCode ?? null,
+                rain: weatherData.rain ?? 0,
+                wind: weatherData.wind ?? 0,
+                fixed: true,
+              } as Plan
+
+              const rating = getRating(temporaryPlan)
+
+              if (rating.label !== 'おすすめ') {
+               return null
+              }
+
+             return temporaryPlan
+            } catch (error) {
+              console.error(
+                `${mountain.name}の天気取得に失敗しました:`,
+                error
+              )
               return null
             }
-
-            const weatherData = await response.json()
-
-            const temporaryPlan = {
-              id: '',
-              title: mountain.name,
-              mountainId: mountain.id,
-              date: targetDate,
-              weather: weatherData.weather ?? '不明',
-              weatherCode:
-                weatherData.weatherCode ?? null,
-              rain: weatherData.rain ?? 0,
-              wind: weatherData.wind ?? 0,
-              fixed: true,
-            } as Plan
-
-            const rating = getRating(temporaryPlan)
-
-            if (rating.label !== 'おすすめ') {
-              return null
-            }
-
-            return temporaryPlan
-          } catch (error) {
-            console.error(
-              `${mountain.name}の天気取得に失敗しました:`,
-              error
-            )
-            return null
-          }
-        })
-      )
-
-      setAlternativeResults(
-        results.filter(
-          (plan): plan is Plan => plan !== null
+          })
         )
-      )
-    } finally {
-      setIsAlternativeLoading(false)
-    }
-  }
+
+        setAlternativeResults(
+          results.filter(
+            (plan): plan is Plan => plan !== null
+          )
+        )
+      } finally {
+        setIsAlternativeLoading(false)
+      }
+    },
+    [alternativeMountains]
+  )
 
   /**
    * 代替プラン検索モーダルを開く
@@ -605,11 +600,15 @@ export default function Page() {
       return
     }
 
-    searchAlternativePlans(alternativeDate)
+    const timer = setTimeout(() => {
+      searchAlternativePlans(alternativeDate)
+    }, 0)
+
+    return () => clearTimeout(timer)
   }, [
     isAlternativesOpen,
     alternativeDate,
-    alternativeMountains,
+    searchAlternativePlans,
   ])
 
   return (
@@ -661,7 +660,7 @@ export default function Page() {
               className="secondary-button"
               type="button"
               onClick={() => {
-                window.location.href = '/mountains'
+                router.push('/mountains')
               }}
             >
               <MapPin size={18} />

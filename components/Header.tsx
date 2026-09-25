@@ -1,6 +1,7 @@
 "use client"
 
 import { ChevronRight, Compass } from "lucide-react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/AuthContext"
 
@@ -16,7 +17,7 @@ export default function Header() {
   if (loading) {
     return (
       <header className="site-header">
-        <a
+        <Link
           className="brand"
           href="/"
           aria-label="山旅プランナー ホーム"
@@ -26,14 +27,14 @@ export default function Header() {
           </span>
 
           <span>山旅プランナー</span>
-        </a>
+        </Link>
       </header>
     )
   }
 
   return (
     <header className="site-header">
-      <a
+      <Link
         className="brand"
         href="/"
         aria-label="山旅プランナー ホーム"
@@ -43,7 +44,7 @@ export default function Header() {
         </span>
 
         <span>山旅プランナー</span>
-      </a>
+      </Link>
 
       {user ? (
         <div className="header-actions">

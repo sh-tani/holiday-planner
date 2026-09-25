@@ -195,15 +195,7 @@ export default function PlansPage() {
   useEffect(() => {
     const query = mountainName.trim()
 
-    if (!query) {
-      setMountainCandidates([])
-      setIsMountainSearching(false)
-      return
-    }
-
-    // 既に山を選択済みなら検索しない
-    if (mountainId) {
-      setMountainCandidates([])
+    if (!query || mountainId) {
       return
     }
 
