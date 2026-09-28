@@ -61,6 +61,24 @@ export default function LoginPage() {
     }
   }
 
+  const handleGoogleLogin = async () => {
+    setLoading(true)
+    setError(null)
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    })
+
+    if (error) {
+      console.error("Googleログインエラー:", error)
+      setError(error.message)
+      setLoading(false)
+    }
+  }
+
   // 初期ロード中は読み込み中表示
   if (initialLoading) {
     return <div className="max-w-md mx-auto">読み込み中...</div>
@@ -107,6 +125,23 @@ export default function LoginPage() {
           className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 rounded"
         >
           {loading ? "ログイン中..." : "ログイン"}
+        </button>
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t" />
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="bg-white px-2 text-gray-500">または</span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleGoogleLogin}
+          disabled={loading}
+          className="w-full border border-gray-300 py-2 rounded hover:bg-gray-50"
+        >
+          Googleでログイン
         </button>
       </form>
 

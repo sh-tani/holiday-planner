@@ -46,6 +46,11 @@ export default function SignupPage() {
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          data: {
+            name,
+          },
+        },
       })
 
       if (authError) {
@@ -54,19 +59,6 @@ export default function SignupPage() {
 
       if (!authData.user) {
         throw new Error("ユーザー登録に失敗しました")
-      }
-
-      // 2. プロフィール作成
-      const { error: profileError } = await supabase.from("profiles").insert([
-        {
-          id: authData.user.id,
-          name: name || email.split("@")[0], // 名前が空の場合はメールアドレスの@前を使用
-          email: email,
-        },
-      ])
-
-      if (profileError) {
-        throw profileError
       }
 
       console.log("登録成功")
