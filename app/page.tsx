@@ -286,7 +286,9 @@ export default function Page() {
   /**
    * 予定を登録・更新
    */
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault()
 
     if (
@@ -297,6 +299,10 @@ export default function Page() {
       setFormError(
         '山名を候補から選択し、日程または「日程未定」を入力してください。'
       )
+      return
+    }
+
+    if (authLoading) {
       return
     }
 
@@ -351,18 +357,7 @@ export default function Page() {
       // =========================
       // 予定の登録・更新
       // =========================
-      if (editingId !== null) {
-        await updatePlan(
-          editingId,
-          planData,
-          !!user
-        )
-      } else {
-        await createPlan(
-          planData,
-          !!user
-        )
-      }
+      await createPlan(planData, !!user)
 
       await fetchPlans(!!user)
 
@@ -671,6 +666,7 @@ export default function Page() {
               className="primary-button"
               type="button"
               onClick={openCreate}
+              disabled={saving}
             >
               <Plus size={18} />
               予定を登録
