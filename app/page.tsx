@@ -25,7 +25,6 @@ import { getRating } from '@/lib/planner/rating'
 import { formatDateWithWeekday } from '@/lib/planner/date'
 import PlanCard from '@/components/planner/PlanCard'
 import {
-  searchMountains,
   getMountainLists,
   getMountainsByIds,
 } from '@/lib/mountains/api'
@@ -58,12 +57,9 @@ export default function Page() {
   const [title, setTitle] = useState('')
   const [mountainId, setMountainId] = useState('')
   const [mountainName, setMountainName] = useState('')
-  const [mountainCandidates, setMountainCandidates] = useState<Mountain[]>([])
-  const [mountainList, setMountainList] = useState('')
   const [mountainLists, setMountainLists] = useState<
     { id: string; name: string }[]
   >([])
-  const [isMountainSearching, setIsMountainSearching] = useState(false)
   const [selectedMountain, setSelectedMountain] = useState<Mountain | null>(null)
   const [mountainsById, setMountainsById] = useState<Record<string, Mountain>>({})
 
@@ -132,33 +128,6 @@ export default function Page() {
   }, [])
   
   useEffect(() => {
-    const query = mountainName.trim()
-
-    if (!query || mountainId) {
-      return
-    }
-
-    const timer = setTimeout(async () => {
-      try {
-        setIsMountainSearching(true)
-
-        const data = await searchMountains(
-          query,
-          mountainList
-        )
-        setMountainCandidates(data)
-      } catch (error) {
-        console.error('山の検索に失敗しました:', error)
-        setMountainCandidates([])
-      } finally {
-        setIsMountainSearching(false)
-      }
-    }, 300)
-
-    return () => clearTimeout(timer)
-  }, [mountainName, mountainId, mountainList])
-
-  useEffect(() => {
     async function loadMountainLists() {
       try {
         const lists = await getMountainLists()
@@ -208,13 +177,11 @@ export default function Page() {
     setTitle('')
     setMountainId('')
     setMountainName('')
-    setMountainList('')
     setDate('')
     setUndecided(false)
     setEditingId(null)
     setFormError('')
     setSelectedMountain(null)
-    setMountainCandidates([])
   }
 
   function selectMountain(mountain: Mountain) {
@@ -243,8 +210,7 @@ export default function Page() {
    * 新規登録フォームを開く
    */
   function openCreate() {
-    resetForm()
-    setIsFormOpen(true)
+    router.push('/plans/new')
   }
 
   /**
@@ -297,12 +263,17 @@ export default function Page() {
       (!undecided && !date)
     ) {
       setFormError(
-        '山名を候補から選択し、日程または「日程未定」を入力してください。'
+        '山名または日程を確認してください。'
       )
       return
     }
 
     if (authLoading) {
+      return
+    }
+
+    if (!editingId) {
+      setFormError('編集対象の予定が見つかりません。')
       return
     }
 
@@ -357,7 +328,7 @@ export default function Page() {
       // =========================
       // 予定の登録・更新
       // =========================
-      await createPlan(planData, !!user)
+      await updatePlan(editingId,planData,!!user)
 
       await fetchPlans(!!user)
 
@@ -366,12 +337,7 @@ export default function Page() {
 
     } catch (error) {
       console.error('予定の保存に失敗しました:', error)
-
-      if (editingId !== null) {
-        setFormError('予定の更新に失敗しました。')
-      } else {
-        setFormError('予定の登録に失敗しました。')
-      }
+      setFormError('予定の更新に失敗しました。')
     } finally {
       setSaving(false)
     }
@@ -780,34 +746,19 @@ export default function Page() {
       {/* 予定登録・編集モーダル */}
       <PlanFormModal
         isOpen={isFormOpen}
-        editingId={editingId}
         formError={formError}
         saving={saving}
-
         title={title}
-        mountainId={mountainId}
         mountainName={mountainName}
-        mountainList={mountainList}
-        mountainCandidates={mountainCandidates}
-        isMountainSearching={isMountainSearching}
-        selectedMountain={selectedMountain}
-
         date={date}
         undecided={undecided}
-
         onClose={() => {
           setIsFormOpen(false)
           resetForm()
         }}
 
         onSubmit={handleSubmit}
-
         onTitleChange={setTitle}
-        onMountainNameChange={handleMountainNameChange}
-        onMountainListChange={handleMountainListChange}
-        mountainLists={mountainLists}
-        onSelectMountain={selectMountain}
-        onClearMountain={clearMountain}
         onDateChange={setDate}
         onUndecidedChange={(checked) => {
           setUndecided(checked)
