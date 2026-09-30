@@ -577,6 +577,24 @@ export default function Page() {
                       <Rating
                         rating={getRating(plan)}
                       />
+
+                      {mountain && (
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          onClick={() =>
+                            router.push(
+                              `/plans/new?mountainId=${encodeURIComponent(
+                                mountain.id
+                              )}&date=${encodeURIComponent(
+                                alternativeDate
+                              )}`
+                            )
+                          }
+                        >
+                          この日程で予定登録
+                        </button>
+                      )}
                     </div>
                   )
                 })
