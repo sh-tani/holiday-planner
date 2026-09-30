@@ -114,7 +114,7 @@ export default function MountainMap({ mountains }: Props) {
 
             <div style={{ marginTop: "10px" }}>
               <a
-                href={`/?mountainId=${encodeURIComponent(mountain.id)}`}
+                href={`/plans/new?mountainId=${encodeURIComponent(mountain.id)}`}
                 style={{
                   display: "inline-block",
                   padding: "7px 10px",
