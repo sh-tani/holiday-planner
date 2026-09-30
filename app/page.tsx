@@ -1,70 +1,41 @@
 'use client'
 // lintテスト
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  getPlans,
-  createPlan,
-  updatePlan,
-  deletePlan,
-} from '@/lib/plans/api'
-import {
-  Check,
   ChevronRight,
   CloudSun,
-  Edit3,
   MapPin,
   Plus,
   Sparkles,
-  Trash2,
-  Wind,
   X,
 } from 'lucide-react'
-
 import type { Plan } from "@/lib/types"
 import { getRating } from '@/lib/planner/rating'
 import { formatDateWithWeekday } from '@/lib/planner/date'
 import PlanCard from '@/components/planner/PlanCard'
-import {
-  getMountainLists,
-  getMountainsByIds,
-} from '@/lib/mountains/api'
+import { getMountainsByIds } from '@/lib/mountains/api'
 import type { Mountain } from '@/lib/mountains/api'
 import Rating from '@/components/planner/Rating'
 import EmptyState from '@/components/planner/EmptyState'
-import PlanFormModal from '@/components/planner/PlanFormModal'
 import { useAuth } from '@/lib/AuthContext'
 import PlanList from '@/components/planner/PlanList'
 import { useRouter } from "next/navigation"
+import { deletePlan, getPlans } from '@/lib/plans/api'
 
 export default function Page() {
-  const {user, profile, loading: authLoading} = useAuth()
+  const {user, loading: authLoading} = useAuth()
   const [plans, setPlans] = useState<Plan[]>([])
   const [activeTab, setActiveTab] = useState<'weekly' | 'all'>('weekly')
 
-  const [isFormOpen, setIsFormOpen] = useState(false)
   const [isAlternativesOpen, setIsAlternativesOpen] = useState(false)
 
   const [alternativeDate, setAlternativeDate] = useState('')
   const [alternativeResults, setAlternativeResults] = useState<Plan[]>([])
   const [isAlternativeLoading, setIsAlternativeLoading] = useState(false)
 
-  const [editingId, setEditingId] = useState<string | null>(null)
-
-  const [formError, setFormError] = useState('')
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
 
-  const [title, setTitle] = useState('')
-  const [mountainId, setMountainId] = useState('')
-  const [mountainName, setMountainName] = useState('')
-  const [mountainLists, setMountainLists] = useState<
-    { id: string; name: string }[]
-  >([])
-  const [selectedMountain, setSelectedMountain] = useState<Mountain | null>(null)
   const [mountainsById, setMountainsById] = useState<Record<string, Mountain>>({})
-
-  const [date, setDate] = useState('')
-  const [undecided, setUndecided] = useState(false)
   const router = useRouter()
 
   
@@ -81,65 +52,7 @@ export default function Page() {
       fetchPlans(false)
     }
   }, [user, authLoading])
-
-  useEffect(() => {
-    const mountainIdFromUrl =
-      new URLSearchParams(window.location.search).get('mountainId')
-
-    if (typeof mountainIdFromUrl !== 'string' || mountainIdFromUrl.length === 0) {
-      return
-    }
-
-    async function openMountainPlanForm() {
-      try {
-        const response = await fetch(
-          `/api/mountains?id=${encodeURIComponent(mountainIdFromUrl!)}`
-        )
-
-        if (!response.ok) {
-          throw new Error('山情報の取得に失敗しました')
-        }
-
-        const mountain = await response.json()
-
-        if (!mountain) {
-          throw new Error('山情報が見つかりませんでした')
-        }
-
-        resetForm()
-
-        setMountainId(mountain.id)
-        setMountainName(mountain.name)
-        setSelectedMountain(mountain)
-
-        setIsFormOpen(true)
-
-        // URLからmountainIdを消す
-        window.history.replaceState({}, '', '/')
-      } catch (error) {
-        console.error(
-          '山情報の取得に失敗しました:',
-          error
-        )
-      }
-    }
-
-    openMountainPlanForm()
-  }, [])
   
-  useEffect(() => {
-    async function loadMountainLists() {
-      try {
-        const lists = await getMountainLists()
-        setMountainLists(lists)
-      } catch (error) {
-        console.error('山リストの取得に失敗しました:', error)
-      }
-    }
-
-    loadMountainLists()
-  }, [])
-
   async function fetchPlans(loggedIn: boolean) {
     setLoading(true)
 
@@ -162,50 +75,7 @@ export default function Page() {
       setLoading(false)
     }
   }
-
-  function handleMountainListChange(value: string) {
-    setMountainList(value)
-    // リストを変更したら、現在選択している山を解除
-    setMountainId('')
-    setSelectedMountain(null)
-    setMountainCandidates([])
-  }
-  /**
-   * フォームを初期化
-   */
-  function resetForm() {
-    setTitle('')
-    setMountainId('')
-    setMountainName('')
-    setDate('')
-    setUndecided(false)
-    setEditingId(null)
-    setFormError('')
-    setSelectedMountain(null)
-  }
-
-  function selectMountain(mountain: Mountain) {
-    setMountainId(mountain.id)
-    setMountainName(mountain.name)
-    setSelectedMountain(mountain)
-    setMountainCandidates([])
-    setFormError('')
-  }
   
-  function clearMountain() {
-    setMountainId('')
-    setMountainName('')
-    setSelectedMountain(null)
-    setMountainCandidates([])
-  }
-
-  function handleMountainNameChange(value: string) {
-    setMountainName(value)
-    setMountainId('')
-    setSelectedMountain(null)
-    setMountainCandidates([])
-  }
-
   /**
    * 新規登録フォームを開く
    */
@@ -213,134 +83,8 @@ export default function Page() {
     router.push('/plans/new')
   }
 
-  /**
-   * 編集フォームを開く
-   */
-  async function openEdit(plan: Plan) {
-    setEditingId(plan.id)
-    setTitle(plan.title)
-    setDate(plan.date ?? '')
-    setUndecided(!plan.fixed)
-    setFormError('')
-
-    try {
-      const response = await fetch(
-        `/api/mountains?id=${encodeURIComponent(plan.mountainId)}`
-      )
-
-      if (!response.ok) {
-        throw new Error('山情報の取得に失敗しました')
-      }
-
-      const mountain = await response.json()
-
-      if (!mountain) {
-        throw new Error('山情報が見つかりませんでした')
-      }
-
-      setMountainId(mountain.id)
-      setMountainName(mountain.name)
-      setSelectedMountain(mountain)
-    } catch (error) {
-      console.error('編集対象の山情報取得に失敗しました:', error)
-      setFormError('山情報の取得に失敗しました。')
-    }
-
-    setIsFormOpen(true)
-  }
-
-  /**
-   * 予定を登録・更新
-   */
-  async function handleSubmit(
-    event: React.FormEvent<HTMLFormElement>
-  ) {
-    event.preventDefault()
-
-    if (
-      !mountainId ||
-      !selectedMountain ||
-      (!undecided && !date)
-    ) {
-      setFormError(
-        '山名または日程を確認してください。'
-      )
-      return
-    }
-
-    if (authLoading) {
-      return
-    }
-
-    if (!editingId) {
-      setFormError('編集対象の予定が見つかりません。')
-      return
-    }
-
-    setSaving(true)
-    setFormError('')
-
-    try {
-      let weather = '不明'
-      let weatherCode: number | null = null
-      let rain = 0
-      let wind = 0
-
-      // 日程が決まっている場合だけ天気を取得
-      if (!undecided && date) {
-        const weatherResponse = await fetch(
-          `/api/weather?latitude=${encodeURIComponent(
-            selectedMountain.latitude
-          )}&longitude=${encodeURIComponent(
-            selectedMountain.longitude
-          )}&date=${encodeURIComponent(date)}`
-        )
-
-        if (!weatherResponse.ok) {
-          console.warn(
-            '天気予報がまだ取得できないため、予報待ちとして登録します'
-          )
-        } else {
-          const weatherData = await weatherResponse.json()
-
-          weather = weatherData.weather ?? '不明'
-          weatherCode = weatherData.weatherCode ?? null
-          rain = weatherData.rain ?? 0
-          wind = weatherData.wind ?? 0
-        }
-      }
-
-      // タイトル未入力なら山名を使用
-      const finalTitle =
-        (title ?? '').trim() || selectedMountain.name
-
-      const planData = {
-        title: finalTitle,
-        mountainId: selectedMountain.id,
-        date: undecided ? null : date,
-        weather,
-        weatherCode,
-        rain,
-        wind,
-        fixed: !undecided,
-      }
-
-      // =========================
-      // 予定の登録・更新
-      // =========================
-      await updatePlan(editingId,planData,!!user)
-
-      await fetchPlans(!!user)
-
-      setIsFormOpen(false)
-      resetForm()
-
-    } catch (error) {
-      console.error('予定の保存に失敗しました:', error)
-      setFormError('予定の更新に失敗しました。')
-    } finally {
-      setSaving(false)
-    }
+  function openEdit(plan: Plan) {
+    router.push(`/plans/${plan.id}/edit`)
   }
 
   /**
@@ -632,7 +376,6 @@ export default function Page() {
               className="primary-button"
               type="button"
               onClick={openCreate}
-              disabled={saving}
             >
               <Plus size={18} />
               予定を登録
@@ -742,32 +485,6 @@ export default function Page() {
           </section>
         )}
       </div>
-
-      {/* 予定登録・編集モーダル */}
-      <PlanFormModal
-        isOpen={isFormOpen}
-        formError={formError}
-        saving={saving}
-        title={title}
-        mountainName={mountainName}
-        date={date}
-        undecided={undecided}
-        onClose={() => {
-          setIsFormOpen(false)
-          resetForm()
-        }}
-
-        onSubmit={handleSubmit}
-        onTitleChange={setTitle}
-        onDateChange={setDate}
-        onUndecidedChange={(checked) => {
-          setUndecided(checked)
-
-          if (checked) {
-            setDate('')
-          }
-        }}
-      />
 
       {/* 代替プランモーダル */}
       {isAlternativesOpen && (
