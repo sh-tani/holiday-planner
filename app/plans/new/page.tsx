@@ -28,7 +28,9 @@ export default function NewPlanPage() {
   const [selectedMountain, setSelectedMountain] =
     useState<Mountain | null>(null)
 
-  const [date, setDate] = useState('')
+  const [date, setDate] = useState(
+    () => searchParams.get('date') ?? ''
+  )
   const [undecided, setUndecided] = useState(false)
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -53,12 +55,14 @@ export default function NewPlanPage() {
   // URLの mountainId から山を取得
   useEffect(() => {
     async function loadMountain() {
-        const mountainIdFromUrl =
-            searchParams.get('mountainId')
-        if (!mountainIdFromUrl) {
-            return
-        }
-        try {
+      const mountainIdFromUrl =
+        searchParams.get('mountainId')
+
+      if (!mountainIdFromUrl) {
+        return
+      }
+
+      try {
         const response = await fetch(
           `/api/mountains?id=${encodeURIComponent(
             mountainIdFromUrl
