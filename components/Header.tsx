@@ -48,9 +48,16 @@ export default function Header() {
 
       {user ? (
         <div className="header-actions">
-          <span className="user-name">
-            {profile?.name ? `${profile.name}さん` : ""}
-          </span>
+          <button
+            type="button"
+            onClick={() => router.push("/account")}
+            className="login-button"
+          >
+            <span className="user-name">
+              {profile?.name ? `${profile.name}さん` : ""}
+            </span>
+            <ChevronRight size={16} />
+          </button>
 
           <button
             type="button"
