@@ -12,6 +12,7 @@ type AuthContextType = {
   profile: any | null
   loading: boolean
   signOut: () => Promise<void>
+  updateProfile: (updates: Record<string, any>) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -19,6 +20,7 @@ const AuthContext = createContext<AuthContextType>({
   profile: null,
   loading: true,
   signOut: async () => {},
+  updateProfile: async () => {},
 })
 
 export const useAuth = () => useContext(AuthContext)
@@ -110,6 +112,33 @@ export const AuthProvider = ({
     setProfile(null)
   }
 
+  const updateProfile = async (updates: Record<string, any>) => {
+    if (!user) {
+      throw new Error("ログインが必要です")
+    }
+
+    const supabase = createClient()
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .update(updates)
+      .eq("id", user.id)
+      .select()
+      .single()
+
+    if (error) {
+      console.error("プロフィール更新DBエラー:", {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+      })
+      throw error
+    }
+
+    setProfile(data)
+  }
+
   // 子コンポーネントにユーザー情報やログアウト関数を提供
   return (
     <AuthContext.Provider
@@ -118,6 +147,7 @@ export const AuthProvider = ({
         profile,
         loading,
         signOut,
+        updateProfile,
       }}
     >
       {children}
