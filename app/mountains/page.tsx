@@ -6,6 +6,8 @@ import {
   getMountainLists,
   type MountainList,
 } from "@/lib/mountains/api"
+import { useAuth } from "@/lib/AuthContext"
+import { createClient } from "@/lib/supabase/client"
 
 const MountainMap = dynamic(
   () => import("@/components/mountains/MountainMap"),
@@ -25,6 +27,7 @@ type Mountain = {
 }
 
 export default function MountainsPage() {
+  const { user } = useAuth()
   const [mountains, setMountains] = useState<Mountain[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -33,6 +36,10 @@ export default function MountainsPage() {
   const [selectedPrefecture, setSelectedPrefecture] = useState("")
   const [mountainLists, setMountainLists] = useState<MountainList[]>([])
   const [selectedList, setSelectedList] = useState("")
+  const [climbedFilter, setClimbedFilter] = useState("all")
+  const [climbedMountainIds, setClimbedMountainIds] = useState<Set<string>>(
+    new Set()
+  )
 
   useEffect(() => {
     async function loadMountains() {
@@ -55,6 +62,14 @@ export default function MountainsPage() {
         }
 
         const data = await response.json()
+        if (
+          selectedPrefecture &&
+          !data.some((mountain: Mountain) =>
+            mountain.prefecture?.includes(selectedPrefecture)
+          )
+        ) {
+          setSelectedPrefecture("")
+        }
         setMountains(data)
       } catch (err) {
         setError(
@@ -68,7 +83,7 @@ export default function MountainsPage() {
     }
 
     loadMountains()
-  }, [selectedList])
+  }, [selectedList, selectedPrefecture])
 
   useEffect(() => {
     async function loadMountainLists() {
@@ -82,6 +97,86 @@ export default function MountainsPage() {
 
     loadMountainLists()
   }, [])
+
+  useEffect(() => {
+    async function loadClimbedMountains() {
+      if (!user) {
+        setClimbedMountainIds(new Set())
+        return
+      }
+
+      const supabase = createClient()
+
+      const { data, error } = await supabase
+        .from("user_mountains")
+        .select("mountain_id")
+        .eq("user_id", user.id)
+        .eq("climbed", true)
+
+      if (error) {
+        console.error("登頂済み山の取得に失敗しました:", error)
+        return
+      }
+
+      setClimbedMountainIds(
+        new Set(data.map((record) => record.mountain_id))
+      )
+    }
+
+    loadClimbedMountains()
+  }, [user])
+
+  async function handleToggleClimbed(mountainId: string) {
+    if (!user) {
+      alert("登頂記録を管理するにはログインが必要です")
+      return
+    }
+
+    const supabase = createClient()
+    const isClimbed = climbedMountainIds.has(mountainId)
+
+    if (isClimbed) {
+      const { error } = await supabase
+        .from("user_mountains")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("mountain_id", mountainId)
+
+      if (error) {
+        console.error("登頂記録の削除に失敗しました:", error)
+        alert("登頂記録の更新に失敗しました")
+        return
+      }
+
+      setClimbedMountainIds((current) => {
+        const next = new Set(current)
+        next.delete(mountainId)
+        return next
+      })
+      return
+    }
+
+    const { error } = await supabase
+      .from("user_mountains")
+      .upsert({
+        user_id: user.id,
+        mountain_id: mountainId,
+        climbed: true,
+        climbed_at: new Date().toISOString(),
+      })
+
+    if (error) {
+      console.error("登頂記録の登録に失敗しました:", error)
+      alert("登頂記録の更新に失敗しました")
+      return
+    }
+
+    setClimbedMountainIds((current) => {
+      const next = new Set(current)
+      next.add(mountainId)
+      return next
+    })
+  }
 
   function handleSearch() {
     setAppliedQuery(searchQuery)
@@ -165,10 +260,17 @@ export default function MountainsPage() {
       const matchesPrefecture =
         !selectedPrefecture ||
         Boolean(mountain.prefecture?.includes(selectedPrefecture))
+      
+      const matchesClimbed =
+        climbedFilter === "all" ||
+        (climbedFilter === "climbed" &&
+          climbedMountainIds.has(mountain.id)) ||
+        (climbedFilter === "unclimbed" &&
+          !climbedMountainIds.has(mountain.id))
 
-      return matchesQuery && matchesPrefecture
+      return matchesQuery && matchesPrefecture && matchesClimbed
     })
-  }, [mountains, appliedQuery, selectedPrefecture])
+  }, [mountains, appliedQuery, selectedPrefecture, climbedFilter, climbedMountainIds])
 
   if (loading) {
     return (
@@ -215,7 +317,6 @@ export default function MountainsPage() {
             value={selectedList}
             onChange={(event) => {
               setSelectedList(event.target.value)
-              setSelectedPrefecture("")
             }}
             className="!w-auto shrink-0 rounded-lg border px-4 py-2.5 text-sm"
           >
@@ -242,6 +343,16 @@ export default function MountainsPage() {
             ))}
           </select>
 
+          <select
+            value={climbedFilter}
+            onChange={(event) => setClimbedFilter(event.target.value)}
+            className="!w-auto shrink-0 rounded-lg border px-4 py-2.5 text-sm"
+          >
+            <option value="all">登頂状態すべて</option>
+            <option value="unclimbed">未登頂</option>
+            <option value="climbed">登頂済み</option>
+          </select>
+
           <input
             id="mountain-search"
             type="search"
@@ -266,7 +377,11 @@ export default function MountainsPage() {
 
       {/* 検索結果 */}
       <div className="overflow-hidden rounded-xl border">
-        <MountainMap mountains={filteredMountains} />
+        <MountainMap
+          mountains={filteredMountains}
+          climbedMountainIds={climbedMountainIds}
+          onToggleClimbed={handleToggleClimbed}
+        />
       </div>
 
       {filteredMountains.length === 0 && (
