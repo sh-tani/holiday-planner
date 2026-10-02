@@ -23,11 +23,43 @@ type Mountain = {
 
 type Props = {
   mountains: Mountain[]
+  climbedMountainIds: Set<string>
+  onToggleClimbed: (mountainId: string) => void
 }
 
 const mountainIcon = L.divIcon({
   className: "mountain-marker",
   html: `<div class="mountain-marker-pin"></div>`,
+  iconSize: [16, 16],
+  iconAnchor: [8, 8],
+  popupAnchor: [0, -10],
+})
+
+const climbedMountainIcon = L.divIcon({
+  className: "mountain-marker",
+  html: `
+    <div
+      class="mountain-marker-pin"
+      style="
+        background: #16a34a;
+        position: relative;
+      "
+    >
+      <span
+        style="
+          position: absolute;
+          color: #fff;
+          font-size: 10px;
+          font-weight: 700;
+          left: 50%;
+          top: 50%;
+          transform: translate(-50%, -50%);
+        "
+      >
+        ✓
+      </span>
+    </div>
+  `,
   iconSize: [16, 16],
   iconAnchor: [8, 8],
   popupAnchor: [0, -10],
@@ -79,7 +111,7 @@ const mountainIcon = L.divIcon({
     return null
   }
 
-export default function MountainMap({ mountains }: Props) {
+export default function MountainMap({ mountains, climbedMountainIds, onToggleClimbed, }: Props) {
   return (
     <MapContainer
       center={[35.2, 136.0]}
@@ -98,7 +130,11 @@ export default function MountainMap({ mountains }: Props) {
         <Marker
           key={mountain.id}
           position={[mountain.latitude, mountain.longitude]}
-          icon={mountainIcon}
+          icon={
+            climbedMountainIds.has(mountain.id)
+              ? climbedMountainIcon
+              : mountainIcon
+          }
         >
           <Popup>
             <strong>{mountain.name}</strong>
@@ -111,6 +147,28 @@ export default function MountainMap({ mountains }: Props) {
                 標高 {mountain.elevation}m
               </>
             )}
+
+            <div style={{ marginTop: "10px" }}>
+              <button
+                type="button"
+                onClick={() => onToggleClimbed(mountain.id)}
+                style={{
+                  display: "inline-block",
+                  padding: "7px 10px",
+                  borderRadius: "8px",
+                  border: "1px solid #d1d5db",
+                  background: "#fff",
+                  color: "#374151",
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                {climbedMountainIds.has(mountain.id)
+                  ? "登頂済み ✓"
+                  : "登頂済みにする"}
+              </button>
+            </div>
 
             <div style={{ marginTop: "10px" }}>
               <a
