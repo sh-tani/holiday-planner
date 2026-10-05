@@ -8,4 +8,9 @@ export type Plan = {
   rain: number
   wind: number
   fixed: boolean
+  departureTime: string | null
+  returnTime: string | null
+  outboundTravelMinutes: number | null
+  activityMinutes: number | null
+  returnTravelMinutes: number | null
 }

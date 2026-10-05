@@ -34,6 +34,11 @@ export async function PATCH(
       rain,
       wind,
       fixed,
+      departureTime,
+      returnTime,
+      outboundTravelMinutes,
+      activityMinutes,
+      returnTravelMinutes,
     } = body
 
     if (!mountainId) {
@@ -54,6 +59,11 @@ export async function PATCH(
         rain: rain ?? 0,
         wind: wind ?? 0,
         fixed: fixed ?? true,
+        departure_time: departureTime ?? null,
+        return_time: returnTime ?? null,
+        outbound_travel_minutes: outboundTravelMinutes ?? null,
+        activity_minutes: activityMinutes ?? null,
+        return_travel_minutes: returnTravelMinutes ?? null,
       })
       .eq('id', id)
       .eq('user_id', user.id)
@@ -82,6 +92,11 @@ export async function PATCH(
       rain: data.rain ?? 0,
       wind: data.wind ?? 0,
       fixed: data.fixed ?? true,
+      departureTime: data.departure_time ?? null,
+      returnTime: data.return_time ?? null,
+      outboundTravelMinutes: data.outbound_travel_minutes ?? null,
+      activityMinutes: data.activity_minutes ?? null,
+      returnTravelMinutes: data.return_travel_minutes ?? null,
     }
 
     return NextResponse.json(plan)
