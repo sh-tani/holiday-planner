@@ -43,6 +43,11 @@ export async function GET() {
       rain: plan.rain ?? 0,
       wind: plan.wind ?? 0,
       fixed: plan.fixed ?? true,
+      departureTime: plan.departure_time ?? null,
+      returnTime: plan.return_time ?? null,
+      outboundTravelMinutes: plan.outbound_travel_minutes ?? null,
+      activityMinutes: plan.activity_minutes ?? null,
+      returnTravelMinutes: plan.return_travel_minutes ?? null,
     }))
 
     return NextResponse.json(plans)
@@ -84,6 +89,11 @@ export async function POST(request: Request) {
       rain,
       wind,
       fixed,
+      departureTime,
+      returnTime,
+      outboundTravelMinutes,
+      activityMinutes,
+      returnTravelMinutes,
     } = body
 
     // 必須チェック
@@ -106,6 +116,11 @@ export async function POST(request: Request) {
         rain: rain ?? 0,
         wind: wind ?? 0,
         fixed: fixed ?? true,
+        departure_time: departureTime ?? null,
+        return_time: returnTime ?? null,
+        outbound_travel_minutes: outboundTravelMinutes ?? null,
+        activity_minutes: activityMinutes ?? null,
+        return_travel_minutes: returnTravelMinutes ?? null,
         user_id: user.id,
       })
       .select()
@@ -134,6 +149,11 @@ export async function POST(request: Request) {
       rain: data.rain ?? 0,
       wind: data.wind ?? 0,
       fixed: data.fixed ?? true,
+      departureTime: data.departure_time ?? null,
+      returnTime: data.return_time ?? null,
+      outboundTravelMinutes: data.outbound_travel_minutes ?? null,
+      activityMinutes: data.activity_minutes ?? null,
+      returnTravelMinutes: data.return_travel_minutes ?? null,
     }
 
     return NextResponse.json(plan, { status: 201 })

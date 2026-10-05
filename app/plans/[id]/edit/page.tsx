@@ -26,6 +26,13 @@ export default function EditPlanPage() {
 
   const [title, setTitle] = useState('')
   const [date, setDate] = useState('')
+  const [departureTime, setDepartureTime] = useState('')
+  const [returnTime, setReturnTime] = useState('')
+  const [outboundTravelMinutes, setOutboundTravelMinutes] =
+    useState('')
+  const [activityMinutes, setActivityMinutes] = useState('')
+  const [returnTravelMinutes, setReturnTravelMinutes] =
+    useState('')
   const [undecided, setUndecided] = useState(false)
 
   const [mountain, setMountain] =
@@ -59,6 +66,17 @@ export default function EditPlanPage() {
         setTitle(plan.title)
         setDate(plan.date ?? '')
         setUndecided(!plan.fixed)
+        setDepartureTime(plan.departureTime ?? '')
+        setReturnTime(plan.returnTime ?? '')
+        setOutboundTravelMinutes(
+          plan.outboundTravelMinutes?.toString() ?? ''
+        )
+        setActivityMinutes(
+          plan.activityMinutes?.toString() ?? ''
+        )
+        setReturnTravelMinutes(
+          plan.returnTravelMinutes?.toString() ?? ''
+        )
 
         const mountainMap =
           await getMountainsByIds([
@@ -150,6 +168,20 @@ export default function EditPlanPage() {
           rain,
           wind,
           fixed: !undecided,
+          departureTime: departureTime || null,
+          returnTime: returnTime || null,
+          outboundTravelMinutes:
+            outboundTravelMinutes
+              ? Number(outboundTravelMinutes)
+              : null,
+          activityMinutes:
+            activityMinutes
+              ? Number(activityMinutes)
+              : null,
+          returnTravelMinutes:
+            returnTravelMinutes
+              ? Number(returnTravelMinutes)
+              : null,
         },
         !!user
       )
@@ -261,6 +293,69 @@ export default function EditPlanPage() {
                 }}
               />
               日程未定
+            </label>
+
+            <label>
+              出発時刻
+              <input
+                type="time"
+                value={departureTime}
+                onChange={(event) =>
+                  setDepartureTime(event.target.value)
+                }
+              />
+            </label>
+
+            <label>
+              帰宅時刻
+              <input
+                type="time"
+                value={returnTime}
+                onChange={(event) =>
+                  setReturnTime(event.target.value)
+                }
+              />
+            </label>
+
+            <label>
+              往路移動時間（分）
+              <input
+                type="number"
+                min="0"
+                value={outboundTravelMinutes}
+                onChange={(event) =>
+                  setOutboundTravelMinutes(event.target.value)
+                }
+                placeholder="例：90"
+              />
+            </label>
+
+            <label>
+              活動時間（分）
+
+              <input
+                type="number"
+                min="1"
+                value={activityMinutes}
+                onChange={(event) =>
+                  setActivityMinutes(event.target.value)
+                }
+                placeholder="例：300"
+              />
+            </label>
+
+            <label>
+              復路移動時間（分）
+
+              <input
+                type="number"
+                min="0"
+                value={returnTravelMinutes}
+                onChange={(event) =>
+                  setReturnTravelMinutes(event.target.value)
+                }
+                placeholder="例：90"
+              />
             </label>
 
             <button
