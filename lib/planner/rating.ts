@@ -4,6 +4,7 @@ export type RatingResult = {
   label: string
   tone: 'good' | 'caution' | 'bad'
   score: number
+  reason: string
 }
 
 /**
@@ -16,6 +17,7 @@ export function getRating(plan: Plan): RatingResult {
       label: '日程未定',
       tone: 'caution',
       score: 0,
+      reason: '日程を設定するとおすすめ度を判定できます'
     }
   }
 
@@ -25,6 +27,7 @@ export function getRating(plan: Plan): RatingResult {
       label: '予報待ち',
       tone: 'caution',
       score: 0,
+      reason: '天気予報を取得できていません'
     }
   }
 
@@ -36,6 +39,7 @@ export function getRating(plan: Plan): RatingResult {
       label: 'おすすめしない',
       tone: 'bad',
       score: 10,
+      reason: '雷雨が予想されています',
     }
   }
 
@@ -45,6 +49,7 @@ export function getRating(plan: Plan): RatingResult {
       label: 'おすすめしない',
       tone: 'bad',
       score: 20,
+      reason: '強い雨や雪が予想されています',
     }
   }
 
@@ -54,6 +59,7 @@ export function getRating(plan: Plan): RatingResult {
       label: 'おすすめしない',
       tone: 'bad',
       score: 25,
+      reason: '強い風が予想されています',
     }
   }
 
@@ -72,6 +78,7 @@ export function getRating(plan: Plan): RatingResult {
         label: 'おすすめしない',
         tone: 'bad',
         score: 35,
+        reason: '降水確率または風が強めです',
       }
     }
 
@@ -79,6 +86,7 @@ export function getRating(plan: Plan): RatingResult {
       label: '注意して計画',
       tone: 'caution',
       score: 55,
+      reason: '雨や雪が予想されています',
     }
   }
 
@@ -89,6 +97,7 @@ export function getRating(plan: Plan): RatingResult {
         label: 'おすすめ',
         tone: 'good',
         score: 92,
+        reason: '降水確率が低く、風も穏やかです',
       }
     }
 
@@ -97,6 +106,7 @@ export function getRating(plan: Plan): RatingResult {
         label: '注意して計画',
         tone: 'caution',
         score: 70,
+        reason: '降水確率または風がやや高めです',
       }
     }
 
@@ -104,6 +114,7 @@ export function getRating(plan: Plan): RatingResult {
       label: 'おすすめしない',
       tone: 'bad',
       score: 40,
+      reason: '降水確率または風が強めです',
     }
   }
 
@@ -112,5 +123,6 @@ export function getRating(plan: Plan): RatingResult {
     label: '判定不可',
     tone: 'caution',
     score: 0,
+    reason: '天候を判定できません',
   }
 }

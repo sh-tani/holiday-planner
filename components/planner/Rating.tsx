@@ -13,7 +13,7 @@ export default function Rating({ rating }: RatingProps) {
 
       <span>
         <strong>{rating.label}</strong>
-        <small>お出かけしやすさ</small>
+        <small className="rating-reason">{rating.reason}</small>
       </span>
 
       <span className="rating-bar">
