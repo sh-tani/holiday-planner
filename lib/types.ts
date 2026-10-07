@@ -14,3 +14,10 @@ export type Plan = {
   activityMinutes: number | null
   returnTravelMinutes: number | null
 }
+
+export type HourlyWeather = {
+  time: string
+  weatherCode: number | null
+  rain: number | null
+  wind: number | null
+}

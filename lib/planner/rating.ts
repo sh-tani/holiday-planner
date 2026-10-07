@@ -1,4 +1,4 @@
-import type { Plan } from '@/lib/types'
+import type { HourlyWeather, Plan } from '@/lib/types'
 
 export type RatingResult = {
   label: string
@@ -7,32 +7,11 @@ export type RatingResult = {
   reason: string
 }
 
-/**
- * 天気情報からおすすめ度を計算
- */
-export function getRating(plan: Plan): RatingResult {
-  // 日程未定
-  if (!plan.date) {
-    return {
-      label: '日程未定',
-      tone: 'caution',
-      score: 0,
-      reason: '日程を設定するとおすすめ度を判定できます'
-    }
-  }
-
-  // 天気情報が取得できていない
-  if (plan.weatherCode === null) {
-    return {
-      label: '予報待ち',
-      tone: 'caution',
-      score: 0,
-      reason: '天気予報を取得できていません'
-    }
-  }
-
-  const { weatherCode, rain, wind } = plan
-
+function getWeatherRating(
+  weatherCode: number,
+  rain: number,
+  wind: number
+): RatingResult {
   // 雷雨
   if ([95, 96, 99].includes(weatherCode)) {
     return {
@@ -118,11 +97,131 @@ export function getRating(plan: Plan): RatingResult {
     }
   }
 
-  // 想定外のweatherCode
   return {
     label: '判定不可',
     tone: 'caution',
     score: 0,
     reason: '天候を判定できません',
+  }
+}
+
+/**
+ * 日別の天気情報からおすすめ度を計算
+ */
+export function getRating(plan: Plan): RatingResult {
+  if (!plan.date) {
+    return {
+      label: '日程未定',
+      tone: 'caution',
+      score: 0,
+      reason: '日程を設定するとおすすめ度を判定できます',
+    }
+  }
+
+  if (plan.weatherCode === null) {
+    return {
+      label: '予報待ち',
+      tone: 'caution',
+      score: 0,
+      reason: '天気予報を取得できていません',
+    }
+  }
+
+  return getWeatherRating(
+    plan.weatherCode,
+    plan.rain,
+    plan.wind
+  )
+}
+
+/**
+ * 活動時間帯の時間別天気からおすすめ度を計算
+ */
+export function getHourlyRating(
+  plan: Plan,
+  hourly: HourlyWeather[]
+): RatingResult {
+  if (!plan.date) {
+    return {
+      label: '日程未定',
+      tone: 'caution',
+      score: 0,
+      reason: '日程を設定するとおすすめ度を判定できます',
+    }
+  }
+
+  if (
+    !plan.departureTime ||
+    plan.outboundTravelMinutes === null ||
+    plan.activityMinutes === null
+  ) {
+    return getRating(plan)
+  }
+
+  const [departureHour, departureMinute] =
+    plan.departureTime.split(':').map(Number)
+
+  const activityStart =
+    departureHour * 60 +
+    departureMinute +
+    plan.outboundTravelMinutes
+
+  const activityEnd =
+    activityStart + plan.activityMinutes
+
+  const activityHours = hourly.filter((weather) => {
+    const match = weather.time.match(/T(\d{2}):(\d{2})/)
+    if (!match) {
+      return false
+    }
+
+    const hour = Number(match[1])
+    const minute = Number(match[2])
+    const hourStart = hour * 60 + minute
+    const hourEnd = hourStart + 60
+
+    return (
+      hourStart < activityEnd &&
+      hourEnd > activityStart
+    )
+  })
+
+  if (activityHours.length === 0) {
+    return {
+      label: '予報待ち',
+      tone: 'caution',
+      score: 0,
+      reason: '活動時間帯の天気予報を取得できていません',
+    }
+  }
+
+  const ratings = activityHours.map((weather) => {
+    if (
+      weather.weatherCode === null ||
+      weather.rain === null ||
+      weather.wind === null
+    ) {
+      return {
+        label: '予報待ち',
+        tone: 'caution' as const,
+        score: 0,
+        reason: '活動時間帯の天気予報を取得できていません',
+      }
+    }
+
+    return getWeatherRating(
+      weather.weatherCode,
+      weather.rain,
+      weather.wind
+    )
+  })
+
+  const worstRating = ratings.reduce((worst, current) =>
+    current.score < worst.score ? current : worst
+  )
+
+  return {
+    ...worstRating,
+    reason: `活動時間帯：${worstRating.reason}`,
   }
 }
