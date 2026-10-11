@@ -9,8 +9,12 @@ import {
   Sparkles,
   X,
 } from 'lucide-react'
-import type { Plan } from "@/lib/types"
-import { getRating } from '@/lib/planner/rating'
+import type { HourlyWeather, Plan } from "@/lib/types"
+import {
+  getHourlyRating,
+  getRating,
+  type RatingResult,
+} from '@/lib/planner/rating'
 import { formatDateWithWeekday } from '@/lib/planner/date'
 import PlanCard from '@/components/planner/PlanCard'
 import { getMountainsByIds } from '@/lib/mountains/api'
@@ -37,9 +41,9 @@ export default function Page() {
 
   const [mountainsById, setMountainsById] = useState<Record<string, Mountain>>({})
   const router = useRouter()
-
+  const [hourlyRatings, setHourlyRatings] =
+    useState<Record<string, RatingResult>>({})
   
-
   // APIから予定を取得
   useEffect(() => {
     if (authLoading) {
@@ -55,20 +59,60 @@ export default function Page() {
   
   async function fetchPlans(loggedIn: boolean) {
     setLoading(true)
-
     try {
       const loadedPlans = await getPlans(loggedIn)
-
       setPlans(loadedPlans)
-
       const mountainIds = loadedPlans.map(
         (plan) => plan.mountainId
       )
-
       const mountainMap =
         await getMountainsByIds(mountainIds)
-
       setMountainsById(mountainMap)
+      const ratingEntries = await Promise.all(
+        loadedPlans.map(async (plan) => {
+          const fallbackRating = getRating(plan)
+          if (
+            !plan.date ||
+            !plan.departureTime ||
+            plan.outboundTravelMinutes === null ||
+            plan.activityMinutes === null
+          ) {
+            return [plan.id, fallbackRating] as const
+          }
+          const mountain = mountainMap[plan.mountainId]
+          if (!mountain) {
+            return [plan.id, fallbackRating] as const
+          }
+          try {
+            const response = await fetch(
+              `/api/weather?latitude=${encodeURIComponent(
+                mountain.latitude
+              )}&longitude=${encodeURIComponent(
+                mountain.longitude
+              )}&date=${encodeURIComponent(plan.date)}`
+            )
+            if (!response.ok) {
+              return [plan.id, fallbackRating] as const
+            }
+            const weatherData = await response.json()
+            const hourly =
+              (weatherData.hourly ?? []) as HourlyWeather[]
+            return [
+              plan.id,
+              getHourlyRating(plan, hourly),
+            ] as const
+          } catch (error) {
+            console.error(
+              `${plan.title}の時間別天気取得に失敗しました:`,
+              error
+            )
+            return [plan.id, fallbackRating] as const
+          }
+        })
+      )
+      setHourlyRatings(
+        Object.fromEntries(ratingEntries)
+      )
     } catch (error) {
       console.error('予定の取得に失敗しました:', error)
     } finally {
@@ -435,6 +479,7 @@ export default function Page() {
                 key={plan.id}
                 plan={plan}
                 mountain={mountainsById[plan.mountainId] ?? null}
+                rating={hourlyRatings[plan.id] ?? getRating(plan)}
                 onEdit={openEdit}
                 onDelete={removePlan}
               />

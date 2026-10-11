@@ -1,6 +1,6 @@
 import { MapPin, Pencil, Trash2, CloudSun, Wind } from 'lucide-react'
 import type { Plan } from '@/lib/types'
-import { getRating } from '@/lib/planner/rating'
+import type { RatingResult } from '@/lib/planner/rating'
 import { formatDateWithWeekday } from '@/lib/planner/date'
 import Rating from '@/components/planner/Rating'
 
@@ -16,6 +16,7 @@ type Mountain = {
 type PlanCardProps = {
   plan: Plan
   mountain: Mountain | undefined
+  rating: RatingResult
   onEdit: (plan: Plan) => void
   onDelete: (id: string) => void
   compact?: boolean
@@ -24,12 +25,11 @@ type PlanCardProps = {
 export default function PlanCard({
   plan,
   mountain,
+  rating,
   onEdit,
   onDelete,
   compact = false,
 }: PlanCardProps) {
-  const rating = getRating(plan)
-
   return (
     <article
       className={`plan-card ${compact ? 'compact' : ''}`}
@@ -133,7 +133,7 @@ export default function PlanCard({
       </div>
 
       {/* おすすめ度 */}
-      <Rating rating={getRating(plan)} />
+      <Rating rating={rating} />
     </article>
   )
 }

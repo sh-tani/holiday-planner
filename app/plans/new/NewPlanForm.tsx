@@ -37,6 +37,7 @@ export default function NewPlanForm({
   const [undecided, setUndecided] = useState(false)
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [timeBasis, setTimeBasis] = useState<'departure' | 'return'>('departure')
   const [departureTime, setDepartureTime] = useState('')
   const [returnTime, setReturnTime] = useState('')
   const [outboundTravelMinutes, setOutboundTravelMinutes] =
@@ -44,6 +45,42 @@ export default function NewPlanForm({
   const [activityMinutes, setActivityMinutes] = useState('')
   const [returnTravelMinutes, setReturnTravelMinutes] =
     useState('')
+  const totalDurationMinutes =
+    outboundTravelMinutes !== '' &&
+    activityMinutes !== '' &&
+    returnTravelMinutes !== '' &&
+    Number(outboundTravelMinutes) >= 0 &&
+    Number(activityMinutes) > 0 &&
+    Number(returnTravelMinutes) >= 0
+      ? Number(outboundTravelMinutes) +
+        Number(activityMinutes) +
+        Number(returnTravelMinutes)
+      : null
+
+  function addMinutesToTime(time: string, minutes: number) {
+    const [hours, mins] = time.split(':').map(Number)
+    const totalMinutes = hours * 60 + mins + minutes
+    const normalizedMinutes =
+      ((totalMinutes % 1440) + 1440) % 1440
+
+    return `${String(Math.floor(normalizedMinutes / 60)).padStart(2, '0')}:${String(
+      normalizedMinutes % 60
+    ).padStart(2, '0')}`
+  }
+
+  const calculatedReturnTime =
+    timeBasis === 'departure' &&
+    departureTime &&
+    totalDurationMinutes !== null
+      ? addMinutesToTime(departureTime, totalDurationMinutes)
+      : ''
+
+  const calculatedDepartureTime =
+    timeBasis === 'return' &&
+    returnTime &&
+    totalDurationMinutes !== null
+      ? addMinutesToTime(returnTime, -totalDurationMinutes)
+      : ''
 
   // 山リストを取得
   useEffect(() => {
@@ -235,6 +272,33 @@ export default function NewPlanForm({
       const finalTitle =
         title.trim() || selectedMountain.name
 
+      function addMinutesToTime(time: string, minutes: number) {
+        const [hours, mins] = time.split(':').map(Number)
+        const totalMinutes = hours * 60 + mins + minutes
+        const normalizedMinutes =
+          ((totalMinutes % 1440) + 1440) % 1440
+        const resultHours = Math.floor(normalizedMinutes / 60)
+        const resultMinutes = normalizedMinutes % 60
+
+        return `${String(resultHours).padStart(2, '0')}:${String(
+          resultMinutes
+        ).padStart(2, '0')}`
+      }
+
+      const calculatedReturnTime =
+        timeBasis === 'departure' &&
+        departureTime &&
+        totalDurationMinutes !== null
+          ? addMinutesToTime(departureTime, totalDurationMinutes)
+          : ''
+
+      const calculatedDepartureTime =
+        timeBasis === 'return' &&
+        returnTime &&
+        totalDurationMinutes !== null
+          ? addMinutesToTime(returnTime, -totalDurationMinutes)
+          : ''
+
       const planData = {
         title: finalTitle,
         mountainId: selectedMountain.id,
@@ -244,8 +308,14 @@ export default function NewPlanForm({
         rain,
         wind,
         fixed: !undecided,
-        departureTime: departureTime || null,
-        returnTime: returnTime || null,
+        departureTime:
+          (timeBasis === 'departure'
+            ? departureTime
+            : calculatedDepartureTime) || null,
+        returnTime:
+          (timeBasis === 'departure'
+            ? calculatedReturnTime
+            : returnTime) || null,
         outboundTravelMinutes:
           outboundTravelMinutes
             ? Number(outboundTravelMinutes)
@@ -450,27 +520,87 @@ export default function NewPlanForm({
           </label>
 
           {/* 時間設定 */}
-          <label>
-            出発時刻
-            <input
-              type="time"
-              value={departureTime}
-              onChange={(event) =>
-                setDepartureTime(event.target.value)
-              }
-            />
-          </label>
+          <fieldset>
+            <legend>時刻の設定方法</legend>
 
-          <label>
-            帰宅時刻
-            <input
-              type="time"
-              value={returnTime}
-              onChange={(event) =>
-                setReturnTime(event.target.value)
-              }
-            />
-          </label>
+            <label className="check-label">
+              <input
+                type="radio"
+                name="timeBasis"
+                value="departure"
+                checked={timeBasis === 'departure'}
+                onChange={() => {
+                  setTimeBasis('departure')
+                  setReturnTime('')
+                }}
+              />
+              出発時刻を基準にする
+            </label>
+
+            <label className="check-label">
+              <input
+                type="radio"
+                name="timeBasis"
+                value="return"
+                checked={timeBasis === 'return'}
+                onChange={() => {
+                  setTimeBasis('return')
+                  setDepartureTime('')
+                }}
+              />
+              帰宅時刻を基準にする
+            </label>
+          </fieldset>
+
+          {timeBasis === 'departure' ? (
+            <>
+              <label>
+                出発時刻
+
+                <input
+                  type="time"
+                  value={departureTime}
+                  onChange={(event) =>
+                    setDepartureTime(event.target.value)
+                  }
+                />
+              </label>
+
+              <label>
+                帰宅時刻（自動計算）
+
+                <input
+                  type="time"
+                  value={calculatedReturnTime}
+                  readOnly
+                />
+              </label>
+            </>
+          ) : (
+            <>
+              <label>
+                帰宅時刻
+
+                <input
+                  type="time"
+                  value={returnTime}
+                  onChange={(event) =>
+                    setReturnTime(event.target.value)
+                  }
+                />
+              </label>
+
+              <label>
+                出発時刻（自動計算）
+
+                <input
+                  type="time"
+                  value={calculatedDepartureTime}
+                  readOnly
+                />
+              </label>
+            </>
+          )}
 
           <label>
             往路移動時間（分）

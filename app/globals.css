@@ -286,4 +286,10 @@ label { display: grid; gap: 7px; color: #526052; font-size: 12px; font-weight: 7
     width: 30px;
     height: 30px;
   }
+
+  .rating-reason {
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+
 }

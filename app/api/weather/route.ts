@@ -62,6 +62,7 @@ export async function GET(request: Request) {
       `?latitude=${encodeURIComponent(latitude)}` +
       `&longitude=${encodeURIComponent(longitude)}` +
       `&daily=weather_code,precipitation_probability_max,wind_speed_10m_mean` +
+      `&hourly=weather_code,precipitation_probability,wind_speed_10m` +
       `&wind_speed_unit=ms` +
       `&timezone=Asia%2FTokyo` +
       `&start_date=${encodeURIComponent(date)}` +
@@ -70,13 +71,14 @@ export async function GET(request: Request) {
     const response = await fetch(url)
     if (!response.ok) {
       const errorText = await response.text()
-      
+
       console.error('Open-Meteo APIエラー:', {
         status: response.status,
         statusText: response.statusText,
         url,
         errorText,
       })
+
       return NextResponse.json(
         {
           error: 'Open-Meteo APIの取得に失敗しました',
@@ -94,12 +96,24 @@ export async function GET(request: Request) {
     const wind =
       data.daily?.wind_speed_10m_mean?.[0] ?? null
 
+    const hourly = (data.hourly?.time ?? []).map(
+      (time: string, index: number) => ({
+        time,
+        weatherCode: data.hourly?.weather_code?.[index] ?? null,
+        rain:
+          data.hourly?.precipitation_probability?.[index] ?? null,
+        wind:
+          data.hourly?.wind_speed_10m?.[index] ?? null,
+      })
+    )
+
     return NextResponse.json({
       date,
       weatherCode,
       weather: getWeatherText(weatherCode),
       rain,
       wind,
+      hourly,
     })
   } catch (error) {
     console.error('天気情報の取得に失敗しました:', error)
