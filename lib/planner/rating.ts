@@ -134,8 +134,10 @@ export function getRating(plan: Plan): RatingResult {
   )
 }
 
+
+
 /**
- * 活動時間帯の時間別天気からおすすめ度を計算
+ * 活動時間帯を必ず表示し、活動時間帯より評価が低い往路・復路を併記する
  */
 export function getHourlyRating(
   plan: Plan,
@@ -150,43 +152,160 @@ export function getHourlyRating(
     }
   }
 
+  const outbound = plan.outboundTravelMinutes
+  const activity = plan.activityMinutes
+  const returning = plan.returnTravelMinutes
+
   if (
-    !plan.departureTime ||
-    plan.outboundTravelMinutes === null ||
-    plan.activityMinutes === null
+    outbound === null ||
+    activity === null ||
+    returning === null ||
+    outbound < 0 ||
+    activity <= 0 ||
+    returning < 0 ||
+    (!plan.departureTime && !plan.returnTime)
   ) {
     return getRating(plan)
   }
 
-  const [departureHour, departureMinute] =
-    plan.departureTime.split(':').map(Number)
+  function toAbsoluteMinutes(
+    date: string,
+    time: string
+  ): number | null {
+    const dateMatch = date.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    const timeMatch = time.match(/^(\d{2}):(\d{2})/)
 
-  const activityStart =
-    departureHour * 60 +
-    departureMinute +
-    plan.outboundTravelMinutes
-
-  const activityEnd =
-    activityStart + plan.activityMinutes
-
-  const activityHours = hourly.filter((weather) => {
-    const match = weather.time.match(/T(\d{2}):(\d{2})/)
-    if (!match) {
-      return false
+    if (!dateMatch || !timeMatch) {
+      return null
     }
 
-    const hour = Number(match[1])
-    const minute = Number(match[2])
-    const hourStart = hour * 60 + minute
-    const hourEnd = hourStart + 60
+    const [, year, month, day] = dateMatch
+    const [, hour, minute] = timeMatch
 
-    return (
-      hourStart < activityEnd &&
-      hourEnd > activityStart
+    const y = Number(year)
+    const m = Number(month)
+    const d = Number(day)
+    const h = Number(hour)
+    const min = Number(minute)
+
+    if (
+      m < 1 || m > 12 ||
+      d < 1 || d > 31 ||
+      h < 0 || h > 23 ||
+      min < 0 || min > 59
+    ) {
+      return null
+    }
+
+    return Date.UTC(y, m - 1, d, h, min) / 60000
+  }
+
+  const totalDuration = outbound + activity + returning
+  let departureMinutes: number | null = null
+
+  if (plan.departureTime) {
+    departureMinutes = toAbsoluteMinutes(
+      plan.date,
+      plan.departureTime
     )
-  })
+  } else if (plan.returnTime) {
+    const returnMinutes = toAbsoluteMinutes(
+      plan.date,
+      plan.returnTime
+    )
 
-  if (activityHours.length === 0) {
+    if (returnMinutes !== null) {
+      departureMinutes = returnMinutes - totalDuration
+    }
+  }
+
+  if (departureMinutes === null) {
+    return getRating(plan)
+  }
+
+  const segments = [
+    {
+      label: '往路',
+      start: departureMinutes,
+      end: departureMinutes + outbound,
+    },
+    {
+      label: '活動時間帯',
+      start: departureMinutes + outbound,
+      end: departureMinutes + outbound + activity,
+    },
+    {
+      label: '復路',
+      start: departureMinutes + outbound + activity,
+      end: departureMinutes + totalDuration,
+    },
+  ]
+
+  function getSegmentRating(
+    segment: (typeof segments)[number]
+  ): RatingResult | null {
+    if (segment.start >= segment.end) {
+      return null
+    }
+
+    const matchingHours = hourly.filter((weather) => {
+      const match = weather.time.match(
+        /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/
+      )
+
+      if (!match) {
+        return false
+      }
+
+      const hourStart = toAbsoluteMinutes(
+        match[1],
+        `${match[2]}:${match[3]}`
+      )
+
+      if (hourStart === null) {
+        return false
+      }
+
+      return (
+        hourStart < segment.end &&
+        hourStart + 60 > segment.start
+      )
+    })
+
+    if (matchingHours.length === 0) {
+      return null
+    }
+
+    const ratings = matchingHours.map((weather) => {
+      if (
+        weather.weatherCode === null ||
+        weather.rain === null ||
+        weather.wind === null
+      ) {
+        return {
+          label: '予報待ち',
+          tone: 'caution' as const,
+          score: 0,
+          reason: '天気予報を取得できていません',
+        }
+      }
+
+      return getWeatherRating(
+        weather.weatherCode,
+        weather.rain,
+        weather.wind
+      )
+    })
+
+    return ratings.reduce((worst, current) =>
+      current.score < worst.score ? current : worst
+    )
+  }
+
+  const activitySegment = segments[1]
+  const activityRating = getSegmentRating(activitySegment)
+
+  if (!activityRating) {
     return {
       label: '予報待ち',
       tone: 'caution',
@@ -195,33 +314,25 @@ export function getHourlyRating(
     }
   }
 
-  const ratings = activityHours.map((weather) => {
+  const reasons = [
+    `活動時間帯：${activityRating.reason}`,
+  ]
+
+  for (const segment of [segments[0], segments[2]]) {
+    const segmentRating = getSegmentRating(segment)
+
     if (
-      weather.weatherCode === null ||
-      weather.rain === null ||
-      weather.wind === null
+      segmentRating &&
+      segmentRating.label !== '予報待ち' &&
+      activityRating.label !== '予報待ち' &&
+      segmentRating.score < activityRating.score
     ) {
-      return {
-        label: '予報待ち',
-        tone: 'caution' as const,
-        score: 0,
-        reason: '活動時間帯の天気予報を取得できていません',
-      }
+      reasons.push(`${segment.label}：${segmentRating.reason}`)
     }
-
-    return getWeatherRating(
-      weather.weatherCode,
-      weather.rain,
-      weather.wind
-    )
-  })
-
-  const worstRating = ratings.reduce((worst, current) =>
-    current.score < worst.score ? current : worst
-  )
+  }
 
   return {
-    ...worstRating,
-    reason: `活動時間帯：${worstRating.reason}`,
+    ...activityRating,
+    reason: reasons.join(' / '),
   }
 }
