@@ -25,6 +25,8 @@ export async function getPlans(
   const response = await fetch('/api/plans')
 
   if (!response.ok) {
+    const detail = await response.text()
+    console.error("予定取得 API エラー:", response.status, detail)
     throw new Error('予定の取得に失敗しました')
   }
 

@@ -13,6 +13,9 @@ type AuthContextType = {
   loading: boolean
   signOut: () => Promise<void>
   updateProfile: (updates: Record<string, any>) => Promise<void>
+  updateEmail: (email: string) => Promise<void>
+  updatePassword: (password: string) => Promise<void>
+  clearDeletedAccount: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -21,6 +24,9 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   signOut: async () => {},
   updateProfile: async () => {},
+  updateEmail: async () => {},
+  updatePassword: async () => {},
+  clearDeletedAccount: async () => {},
 })
 
 export const useAuth = () => useContext(AuthContext)
@@ -41,26 +47,33 @@ export const AuthProvider = ({
 
     const fetchUser = async () => {
       try {
-        // 現在のセッション情報を取得
         const {
-          data: { session },
-        } = await supabase.auth.getSession()
+          data: { user: currentUser },
+          error,
+        } = await supabase.auth.getUser()
 
-        if (session?.user) {
-          setUser(session.user)
+        if (error) {
+          console.error("ユーザー取得エラー:", error)
+          return
+        }
 
-          // プロフィール情報を取得
-          const { data, error } = await supabase
+        if (currentUser) {
+          setUser(currentUser)
+
+          const { data, error: profileError } = await supabase
             .from("profiles")
             .select("*")
-            .eq("id", session.user.id)
+            .eq("id", currentUser.id)
             .single()
 
-          if (error) {
-            console.error("プロフィール取得エラー:", error)
+          if (profileError) {
+            console.error("プロフィール取得エラー:", profileError)
           }
 
           setProfile(data)
+        } else {
+          setUser(null)
+          setProfile(null)
         }
       } catch (error) {
         console.error("認証情報取得エラー:", error)
@@ -74,7 +87,8 @@ export const AuthProvider = ({
     // 認証状態の変更を監視
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("Auth event:", event)
       if (session?.user) {
         setUser(session.user)
 
@@ -112,6 +126,16 @@ export const AuthProvider = ({
     setProfile(null)
   }
 
+  const clearDeletedAccount = async () => {
+    const supabase = createClient()
+
+    // ブラウザ側のセッションを破棄
+    await supabase.auth.signOut({ scope: "local" })
+
+    setUser(null)
+    setProfile(null)
+  }
+
   const updateProfile = async (updates: Record<string, any>) => {
     if (!user) {
       throw new Error("ログインが必要です")
@@ -139,6 +163,45 @@ export const AuthProvider = ({
     setProfile(data)
   }
 
+  const updateEmail = async (email: string) => {
+    if (!user) {
+      throw new Error("ログインが必要です")
+    }
+
+    const supabase = createClient()
+
+    const { data, error } = await supabase.auth.updateUser({
+      email,
+    })
+
+    if (error) {
+      console.error("メールアドレス更新エラー:", error)
+      throw error
+    }
+
+    if (data.user) {
+      setUser(data.user)
+    }
+  }
+
+  const updatePassword = async (password: string) => {
+    if (!user) {
+      throw new Error("ログインが必要です")
+    }
+
+    const supabase = createClient()
+
+    const { error } = await supabase.auth.updateUser({
+      password,
+    })
+
+    if (error) {
+      console.error("パスワード更新エラー:", error)
+      throw error
+    }
+  }
+
+
   // 子コンポーネントにユーザー情報やログアウト関数を提供
   return (
     <AuthContext.Provider
@@ -148,6 +211,9 @@ export const AuthProvider = ({
         loading,
         signOut,
         updateProfile,
+        updateEmail,
+        updatePassword,
+        clearDeletedAccount,
       }}
     >
       {children}
