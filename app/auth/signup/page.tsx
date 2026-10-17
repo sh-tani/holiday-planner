@@ -41,6 +41,8 @@ export default function SignupPage() {
 
     try {
       const supabase = createClient()
+      const trimmedName = name.trim()
+      const displayName = trimmedName || email.trim().split("@")[0]
 
       // 1. ユーザー登録
       const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -48,7 +50,7 @@ export default function SignupPage() {
         password,
         options: {
           data: {
-            name,
+            name: displayName,
           },
         },
       })
