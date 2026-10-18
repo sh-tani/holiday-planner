@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { validatePlanInput } from '@/lib/plans/validation'
 
 // PATCH /api/plans/[id]
 export async function PATCH(
@@ -23,7 +24,25 @@ export async function PATCH(
       )
     }
 
-    const body = await request.json()
+    let body: unknown
+
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json(
+        { error: 'リクエストのJSON形式が不正です。' },
+        { status: 400 }
+      )
+    }
+
+    const validation = validatePlanInput(body)
+
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: validation.error },
+        { status: 400 }
+      )
+    }
 
     const {
       title,
@@ -39,14 +58,7 @@ export async function PATCH(
       outboundTravelMinutes,
       activityMinutes,
       returnTravelMinutes,
-    } = body
-
-    if (!mountainId) {
-      return NextResponse.json(
-        { error: '山の選択は必須です。' },
-        { status: 400 }
-      )
-    }
+    } = validation.data
 
     const { data, error } = await supabase
       .from('schedule')
@@ -68,17 +80,21 @@ export async function PATCH(
       .eq('id', id)
       .eq('user_id', user.id)
       .select()
-      .single()
+      .maybeSingle()
 
     if (error) {
       console.error('予定の更新に失敗しました:', error)
 
       return NextResponse.json(
-        {
-          error: '予定の更新に失敗しました。',
-          details: error.message,
-        },
+        { error: '予定の更新に失敗しました。' },
         { status: 500 }
+      )
+    }
+
+    if (!data) {
+      return NextResponse.json(
+        { error: '予定が見つかりません。' },
+        { status: 404 }
       )
     }
 
@@ -142,10 +158,7 @@ export async function DELETE(
       console.error('予定の削除に失敗しました:', error)
 
       return NextResponse.json(
-        {
-          error: '予定の削除に失敗しました。',
-          details: error.message,
-        },
+        { error: '予定の削除に失敗しました。' },
         { status: 500 }
       )
     }
