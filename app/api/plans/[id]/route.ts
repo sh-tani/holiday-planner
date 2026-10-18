@@ -68,17 +68,21 @@ export async function PATCH(
       .eq('id', id)
       .eq('user_id', user.id)
       .select()
-      .single()
+      .maybeSingle()
 
     if (error) {
       console.error('予定の更新に失敗しました:', error)
 
       return NextResponse.json(
-        {
-          error: '予定の更新に失敗しました。',
-          details: error.message,
-        },
+        { error: '予定の更新に失敗しました。' },
         { status: 500 }
+      )
+    }
+
+    if (!data) {
+      return NextResponse.json(
+        { error: '予定が見つかりません。' },
+        { status: 404 }
       )
     }
 
@@ -142,10 +146,7 @@ export async function DELETE(
       console.error('予定の削除に失敗しました:', error)
 
       return NextResponse.json(
-        {
-          error: '予定の削除に失敗しました。',
-          details: error.message,
-        },
+        { error: '予定の削除に失敗しました。' },
         { status: 500 }
       )
     }

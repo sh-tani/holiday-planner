@@ -21,6 +21,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from('schedule')
       .select('*')
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -130,10 +131,7 @@ export async function POST(request: Request) {
       console.error('予定の登録に失敗しました:', error)
 
       return NextResponse.json(
-        {
-          error: '予定の登録に失敗しました。',
-          details: error.message,
-        },
+        { error: '予定の登録に失敗しました。' },
         { status: 500 }
       )
     }
