@@ -40,50 +40,86 @@ function getWeatherText(weatherCode: number | null) {
   return '不明'
 }
 
+function isValidDate(date: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return false
+  }
+
+  const [year, month, day] = date.split('-').map(Number)
+  const parsedDate = new Date(`${date}T00:00:00Z`)
+
+  return (
+    Number.isFinite(parsedDate.getTime()) &&
+    parsedDate.getUTCFullYear() === year &&
+    parsedDate.getUTCMonth() + 1 === month &&
+    parsedDate.getUTCDate() === day
+  )
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
 
-    const latitude = searchParams.get('latitude')
-    const longitude = searchParams.get('longitude')
+    const latitudeParam = searchParams.get('latitude')
+    const longitudeParam = searchParams.get('longitude')
     const date = searchParams.get('date')
 
-    if (!latitude || !longitude || !date) {
+    if (
+      latitudeParam === null ||
+      longitudeParam === null ||
+      date === null
+    ) {
       return NextResponse.json(
-        {
-          error: 'latitude、longitude、dateは必須です',
-        },
+        { error: 'latitude、longitude、dateは必須です' },
         { status: 400 }
       )
     }
 
-    const url =
-      `https://api.open-meteo.com/v1/forecast` +
-      `?latitude=${encodeURIComponent(latitude)}` +
-      `&longitude=${encodeURIComponent(longitude)}` +
-      `&daily=weather_code,precipitation_probability_max,wind_speed_10m_mean` +
-      `&hourly=weather_code,precipitation_probability,wind_speed_10m` +
-      `&wind_speed_unit=ms` +
-      `&timezone=Asia%2FTokyo` +
-      `&start_date=${encodeURIComponent(date)}` +
-      `&end_date=${encodeURIComponent(date)}`
+    const latitude = Number(latitudeParam)
+    const longitude = Number(longitudeParam)
 
-    const response = await fetch(url)
+    if (
+      !Number.isFinite(latitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      !Number.isFinite(longitude) ||
+      longitude < -180 ||
+      longitude > 180 ||
+      !isValidDate(date)
+    ) {
+      return NextResponse.json(
+        { error: '緯度・経度または日付が不正です' },
+        { status: 400 }
+      )
+    }
+
+    const params = new URLSearchParams({
+      latitude: String(latitude),
+      longitude: String(longitude),
+      daily:
+        'weather_code,precipitation_probability_max,wind_speed_10m_mean',
+      hourly:
+        'weather_code,precipitation_probability,wind_speed_10m',
+      wind_speed_unit: 'ms',
+      timezone: 'Asia/Tokyo',
+      start_date: date,
+      end_date: date,
+    })
+
+    const url = `https://api.open-meteo.com/v1/forecast?${params}`
+
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(10_000),
+    })
+
     if (!response.ok) {
-      const errorText = await response.text()
-
       console.error('Open-Meteo APIエラー:', {
         status: response.status,
         statusText: response.statusText,
-        url,
-        errorText,
       })
 
       return NextResponse.json(
-        {
-          error: 'Open-Meteo APIの取得に失敗しました',
-          details: errorText,
-        },
+        { error: '天気情報の取得に失敗しました' },
         { status: 502 }
       )
     }
@@ -116,12 +152,19 @@ export async function GET(request: Request) {
       hourly,
     })
   } catch (error) {
+    if (error instanceof Error && error.name === 'TimeoutError') {
+      console.error('Open-Meteo APIがタイムアウトしました')
+
+      return NextResponse.json(
+        { error: '天気情報の取得がタイムアウトしました' },
+        { status: 504 }
+      )
+    }
+
     console.error('天気情報の取得に失敗しました:', error)
 
     return NextResponse.json(
-      {
-        error: '天気情報の取得に失敗しました',
-      },
+      { error: '天気情報の取得に失敗しました' },
       { status: 500 }
     )
   }
