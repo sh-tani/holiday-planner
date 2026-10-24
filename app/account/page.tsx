@@ -209,7 +209,7 @@ export default function AccountPage() {
 
       // 削除成功後、ローカルの認証状態をクリア
       await clearDeletedAccount()
-      
+
       router.replace("/")
       router.refresh()
     } catch (deleteAccountError) {
@@ -233,6 +233,9 @@ export default function AccountPage() {
           <p>プロフィール情報を編集できます。</p>
         </div>
 
+        <div className="section-heading">
+          <h2>プロフィールの編集</h2>
+        </div>
         <form onSubmit={handleSubmit} className="planner-form">
           <div className="form-field">
             <label htmlFor="name">名前</label>
@@ -300,6 +303,14 @@ export default function AccountPage() {
           </button>
         </form>
 
+        <div className="section-heading">
+          <h2>メールアドレスの変更</h2>
+        </div>
+        <div>
+          <p>
+            メールアドレスを変更する場合は、以下のフォームに新しいメールアドレスを入力してください。
+          </p>
+        </div>
         <div className="form-field">
           <label htmlFor="email">現在のメールアドレス</label>
           <input
@@ -347,6 +358,14 @@ export default function AccountPage() {
         </form>
 
         <form onSubmit={handlePasswordSubmit} className="planner-form">
+          <div className="section-heading">
+            <h2>パスワードの変更</h2>
+          </div>
+          <div>
+            <p>
+              パスワードを変更する場合は、以下のフォームに新しいパスワードを入力してください。
+            </p>
+          </div>
           <div className="form-field">
             <label htmlFor="new-password">新しいパスワード</label>
             <input
@@ -395,10 +414,12 @@ export default function AccountPage() {
             {passwordSaving ? "変更中..." : "パスワードを変更"}
           </button>
         </form>
-        
+
         <section className="planner-form">
           <div className="section-heading">
             <h2>アカウントの削除</h2>
+          </div>
+          <div>
             <p>
               アカウントを削除すると、登録した予定、登頂記録、
               プロフィールが削除されます。この操作は取り消せません。

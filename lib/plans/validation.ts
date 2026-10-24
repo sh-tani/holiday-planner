@@ -86,12 +86,12 @@ export function validatePlanInput(
     returnTravelMinutes,
   } = body
 
-  if (
-    typeof mountainId !== 'string' ||
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(mountainId)
-  ) {
-    return { success: false, error: '山の選択は必須です。' }
-  }
+    if (
+      typeof mountainId !== 'string' ||
+      mountainId.trim() === ''
+    ) {
+      return { success: false, error: '山の選択は必須です。' }
+    }
 
   if (
     title !== undefined &&
