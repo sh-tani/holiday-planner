@@ -2,6 +2,8 @@ export type Plan = {
   id: string
   title: string
   mountainId: string
+  trailheadId: string | null
+  courseId: string | null
   date: string | null
   weather: string
   weatherCode: number | null

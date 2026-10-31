@@ -1,6 +1,8 @@
 export type PlanInput = {
   title: string
   mountainId: string
+  trailheadId: string | null
+  courseId: string | null
   date: string | null
   weather: string
   weatherCode: number | null
@@ -30,6 +32,13 @@ const isNullableNumber = (
 ): value is number | null =>
   value === null ||
   (typeof value === 'number' && Number.isFinite(value))
+
+const isNullableUuid = (
+  value: unknown
+): value is string | null =>
+  value === null ||
+  (typeof value === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value))
 
 const isDate = (value: unknown): value is string => {
   if (typeof value !== 'string') return false
@@ -73,6 +82,8 @@ export function validatePlanInput(
   const {
     title,
     mountainId,
+    trailheadId,
+    courseId,
     date,
     weather,
     weatherCode,
@@ -91,6 +102,20 @@ export function validatePlanInput(
       mountainId.trim() === ''
     ) {
       return { success: false, error: '山の選択は必須です。' }
+    }
+
+    if (
+      trailheadId !== undefined &&
+      !isNullableUuid(trailheadId)
+    ) {
+      return { success: false, error: '登山口の形式が不正です。' }
+    }
+
+    if (
+      courseId !== undefined &&
+      !isNullableUuid(courseId)
+    ) {
+      return { success: false, error: 'コースの形式が不正です。' }
     }
 
   if (
@@ -210,6 +235,8 @@ export function validatePlanInput(
     data: {
       title: title == null ? '' : title as string,
       mountainId,
+      trailheadId: trailheadId === undefined ? null : trailheadId,
+      courseId: courseId === undefined ? null : courseId,
       date: date === undefined ? null : date as string | null,
       weather: weather == null ? '不明' : weather as string,
       weatherCode: weatherCode === undefined ? null : weatherCode as number | null,
