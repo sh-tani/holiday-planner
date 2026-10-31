@@ -47,6 +47,8 @@ export async function PATCH(
     const {
       title,
       mountainId,
+      trailheadId,
+      courseId,
       date,
       weather,
       weatherCode,
@@ -65,6 +67,8 @@ export async function PATCH(
       .update({
         title: title ?? '',
         mountain_id: mountainId,
+        trailhead_id: trailheadId,
+        course_id: courseId,
         date: date || null,
         weather: weather ?? '不明',
         weather_code: weatherCode ?? null,
@@ -102,6 +106,8 @@ export async function PATCH(
       id: data.id,
       title: data.title ?? '',
       mountainId: data.mountain_id,
+      trailheadId: data.trailhead_id ?? null,
+      courseId: data.course_id ?? null,
       date: data.date,
       weather: data.weather ?? '不明',
       weatherCode: data.weather_code ?? null,

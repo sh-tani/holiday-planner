@@ -5,8 +5,12 @@ import { useRouter } from 'next/navigation'
 import {
   searchMountains,
   getMountainLists,
+  getMountainDetails,
 } from '@/lib/mountains/api'
-import type { Mountain } from '@/lib/mountains/api'
+import type {
+  Mountain,
+  MountainDetails,
+} from '@/lib/mountains/api'
 import type { FormEvent } from 'react'
 import { createPlan } from '@/lib/plans/api'
 import { useAuth } from '@/lib/AuthContext'
@@ -32,6 +36,18 @@ export default function NewPlanForm({
   const [isMountainSearching, setIsMountainSearching] = useState(false)
   const [selectedMountain, setSelectedMountain] =
     useState<Mountain | null>(null)
+
+  const [mountainDetails, setMountainDetails] =
+    useState<MountainDetails>({
+      trailheads: [],
+      courses: [],
+    })
+  const [isDetailsLoading, setIsDetailsLoading] =
+    useState(false)
+  const [trailheadId, setTrailheadId] =
+    useState('')
+  const [courseId, setCourseId] =
+    useState('')
 
   const [date, setDate] = useState(dateFromUrl)
   const [undecided, setUndecided] = useState(false)
@@ -98,6 +114,47 @@ export default function NewPlanForm({
 
     loadMountainLists()
   }, [])
+
+  // 選択した山の登山口・駐車場・駅・コースを取得
+  useEffect(() => {
+    if (!selectedMountain) return
+
+    const mountainId = selectedMountain.id
+    let cancelled = false
+
+    async function loadMountainDetails() {
+      setIsDetailsLoading(true)
+      setMountainDetails({
+        trailheads: [],
+        courses: [],
+      })
+      setTrailheadId('')
+      setCourseId('')
+
+      try {
+        const details = await getMountainDetails(mountainId)
+
+        if (!cancelled) {
+          setMountainDetails(details)
+        }
+      } catch (error) {
+        console.error(
+          '登山情報の取得に失敗しました:',
+          error
+        )
+      } finally {
+        if (!cancelled) {
+          setIsDetailsLoading(false)
+        }
+      }
+    }
+
+    loadMountainDetails()
+
+    return () => {
+      cancelled = true
+    }
+  }, [selectedMountain])
 
   // URLの mountainId から山を取得
   useEffect(() => {
@@ -204,6 +261,48 @@ export default function NewPlanForm({
     setMountainCandidates([])
   }
 
+  // 登山口を選択
+  function selectTrailhead(id: string) {
+    setTrailheadId(id)
+
+    // 選択した登山口と開始登山口が異なるコースは解除
+    if (courseId) {
+      const selectedCourse = mountainDetails.courses.find(
+        (course) => course.id === courseId
+      )
+
+      if (
+        selectedCourse?.start_trailhead_id &&
+        selectedCourse.start_trailhead_id !== id
+      ) {
+        setCourseId('')
+      }
+    }
+  }
+
+  // コースを選択
+  function selectCourse(id: string) {
+    setCourseId(id)
+
+    const selectedCourse = mountainDetails.courses.find(
+      (course) => course.id === id
+    )
+
+    if (!selectedCourse) return
+
+    // 開始登山口が登録されていれば自動選択
+    if (selectedCourse.start_trailhead_id) {
+      setTrailheadId(selectedCourse.start_trailhead_id)
+    }
+
+    // 所要時間が登録されていれば活動時間に反映
+    if (selectedCourse.duration_minutes !== null) {
+      setActivityMinutes(
+        String(selectedCourse.duration_minutes)
+      )
+    }
+  }
+
   function handleMountainListChange(value: string) {
     setMountainList(value)
     setMountainId('')
@@ -302,6 +401,8 @@ export default function NewPlanForm({
       const planData = {
         title: finalTitle,
         mountainId: selectedMountain.id,
+        trailheadId: trailheadId || null,
+        courseId: courseId || null,
         date: undecided ? null : date,
         weather,
         weatherCode,
@@ -483,6 +584,170 @@ export default function NewPlanForm({
                 変更
               </button>
             </div>
+          )}
+
+          {/* 登山口・コース */}
+          {mountainId && (
+            <section className="mountain-details-section">
+              <h2>登山情報</h2>
+
+              {isDetailsLoading ? (
+                <p>登山情報を読み込んでいます...</p>
+              ) : (
+                <>
+                  {/* 登山口 */}
+                  <label>
+                    登山口（任意）
+
+                    <select
+                      value={trailheadId}
+                      onChange={(event) =>
+                        selectTrailhead(event.target.value)
+                      }
+                    >
+                      <option value="">
+                        登山口を選択しない
+                      </option>
+
+                      {mountainDetails.trailheads.map(
+                        (trailhead) => (
+                          <option
+                            key={trailhead.id}
+                            value={trailhead.id}
+                          >
+                            {trailhead.name}
+                          </option>
+                        )
+                      )}
+                    </select>
+                  </label>
+
+                  {/* 選択した登山口の詳細 */}
+                  {trailheadId && (() => {
+                    const selectedTrailhead =
+                      mountainDetails.trailheads.find(
+                        (trailhead) =>
+                          trailhead.id === trailheadId
+                      )
+
+                    if (!selectedTrailhead) return null
+
+                    return (
+                      <div className="trailhead-details">
+                        <h3>{selectedTrailhead.name}</h3>
+
+                        {selectedTrailhead.description && (
+                          <p>
+                            {selectedTrailhead.description}
+                          </p>
+                        )}
+
+                        {/* 駐車場 */}
+                        <div>
+                          <strong>駐車場</strong>
+
+                          {selectedTrailhead.mountain_parking_lots.length > 0 ? (
+                            <ul>
+                              {selectedTrailhead.mountain_parking_lots.map(
+                                (parking) => (
+                                  <li key={parking.id}>
+                                    {parking.name}
+
+                                    {parking.description && (
+                                      <p>
+                                        {parking.description}
+                                      </p>
+                                    )}
+                                  </li>
+                                )
+                              )}
+                            </ul>
+                          ) : (
+                            <p>登録されている駐車場はありません。</p>
+                          )}
+                        </div>
+
+                        {/* 最寄り駅 */}
+                        <div>
+                          <strong>最寄り駅</strong>
+
+                          {selectedTrailhead.mountain_stations.length > 0 ? (
+                            <ul>
+                              {selectedTrailhead.mountain_stations.map(
+                                (station) => (
+                                  <li key={station.id}>
+                                    {station.name}
+
+                                    {station.description && (
+                                      <p>
+                                        {station.description}
+                                      </p>
+                                    )}
+                                  </li>
+                                )
+                              )}
+                            </ul>
+                          ) : (
+                            <p>登録されている駅はありません。</p>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })()}
+
+                  {/* コース */}
+                  <label>
+                    登山コース（任意）
+
+                    <select
+                      value={courseId}
+                      onChange={(event) =>
+                        selectCourse(event.target.value)
+                      }
+                    >
+                      <option value="">
+                        コースを選択しない
+                      </option>
+
+                      {mountainDetails.courses.map(
+                        (course) => (
+                          <option
+                            key={course.id}
+                            value={course.id}
+                          >
+                            {course.name}
+                            {course.duration_minutes !== null
+                              ? `（約${course.duration_minutes}分）`
+                              : ''}
+                          </option>
+                        )
+                      )}
+                    </select>
+                  </label>
+
+                  {courseId && (() => {
+                    const selectedCourse =
+                      mountainDetails.courses.find(
+                        (course) =>
+                          course.id === courseId
+                      )
+
+                    if (!selectedCourse) return null
+
+                    return selectedCourse.description ? (
+                      <p>{selectedCourse.description}</p>
+                    ) : null
+                  })()}
+
+                  {mountainDetails.trailheads.length === 0 &&
+                    mountainDetails.courses.length === 0 && (
+                      <p>
+                        この山には、まだ登山情報が登録されていません。
+                      </p>
+                    )}
+                </>
+              )}
+            </section>
           )}
 
           {/* 日付 */}

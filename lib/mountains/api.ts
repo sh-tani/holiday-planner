@@ -9,6 +9,51 @@ export type Mountain = {
   elevation: number | null
 }
 
+export type MountainParkingLot = {
+  id: string
+  trailhead_id: string
+  name: string
+  latitude: number | null
+  longitude: number | null
+  description: string | null
+  created_at: string
+}
+
+export type MountainStation = {
+  id: string
+  trailhead_id: string
+  name: string
+  description: string | null
+  created_at: string
+}
+
+export type MountainTrailhead = {
+  id: string
+  mountain_id: string
+  name: string
+  latitude: number | null
+  longitude: number | null
+  description: string | null
+  created_at: string
+  mountain_parking_lots: MountainParkingLot[]
+  mountain_stations: MountainStation[]
+}
+
+export type MountainCourse = {
+  id: string
+  mountain_id: string
+  name: string
+  start_trailhead_id: string | null
+  duration_minutes: number | null
+  description: string | null
+  created_at: string
+}
+
+export type MountainDetails = {
+  trailheads: MountainTrailhead[]
+  courses: MountainCourse[]
+}
+
 export async function searchMountains(
   query: string,
   list?: string
@@ -78,4 +123,18 @@ export async function getMountainsByIds(
         result !== null
     )
   )
+}
+
+export async function getMountainDetails(
+  mountainId: string
+): Promise<MountainDetails> {
+  const response = await fetch(
+    `/api/mountains/${encodeURIComponent(mountainId)}/details`
+  )
+
+  if (!response.ok) {
+    throw new Error('登山情報の取得に失敗しました')
+  }
+
+  return response.json()
 }
